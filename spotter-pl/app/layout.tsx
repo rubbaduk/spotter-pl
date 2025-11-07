@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import { Bebas_Neue } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const bebasNeue = Bebas_Neue({
+const inter = Inter({
   subsets: ["latin"],
-  weight: "400",
 });
 
 export const metadata: Metadata = {
@@ -19,7 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-theme="dark">
-      <body className={bebasNeue.className}>{children}</body>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }
