@@ -1,3 +1,4 @@
+import LifterDropdown from '@/app/components/LifterDropdown' 
 
 import {
   federationGroups,
@@ -43,14 +44,15 @@ export default function Home() {
           <h1 className="text-4xl font-extrabold sm:text-5xl whitespace-nowrap">
             Let's spot
           </h1>
-          <div className="form-control flex-1 h-12">
-            <input
+          <div className="form-control flex-1 h-12 mt-2">
+            <LifterDropdown />
+            {/* <input
               id="u"
               name="user"
               type="text"
               placeholder=""
               className="w-full ml-1.4 sm:ml-0 outline-none focus:outline-none focus:ring-0 border-0 focus:border-0 text-4xl sm:text-5xl font-extrabold bg-transparent h-full leading-none overflow-hidden whitespace-nowrap"
-            />
+            /> */}
           </div>
         </div>
 
