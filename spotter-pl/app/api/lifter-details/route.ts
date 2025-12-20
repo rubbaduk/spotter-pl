@@ -9,7 +9,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    // get the lifter's most recent comp data from opl_raw
+    // get recent competitions to find non-null values
     const result = await pool.query(
         `
         SELECT 
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
         FROM opl.opl_raw
         WHERE name = $1
         ORDER BY date DESC
-        LIMIT 1
+        LIMIT 10
         `,
         [name]
     );
@@ -33,39 +33,44 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: 'Lifter not found' }, { status: 404 });
     }
 
-    const row = result.rows[0];
+    // helper if first query value is null -> use next non-null value
+    const firstNonEmpty = (field: string): string | null => {
+        for (const row of result.rows) {
+            const val = row[field];
+            if (val && typeof val === 'string' && val.trim() !== '') {
+                return val.trim();
+            }
+        }
+        return null;
+    };
+
+    const name_ = firstNonEmpty('name');
+    const sex = firstNonEmpty('sex');
+    const country = firstNonEmpty('country');
+    const federation = firstNonEmpty('federation');
+    const weightclasskg = firstNonEmpty('weightclasskg');
+    const equipment = firstNonEmpty('equipment');
+    const division = firstNonEmpty('division');
+    const lastCompetition = result.rows[0].date; // always use most recent date
 
     // log raw values 
-    console.log('Lifter details raw:', {
-        name: row.name,
-        weightclasskg: row.weightclasskg,
-        division: row.division,
-        equipment: row.equipment,
-        federation: row.federation,
-        country: row.country,
+    console.log('Lifter details (first non-null):', {
+        name: name_,
+        weightclasskg,
+        division,
+        equipment,
+        federation,
+        country,
     });
-
-    // format weight class
-    let weightClass = null;
-    if (row.weightclasskg && row.weightclasskg.trim() !== '') {
-        weightClass = `${row.weightclasskg} kg`;
-    }
-
-    // format division
-    let division = null;
-    if (row.division && row.division.trim() !== '') {
-        division = row.division;
-    }
 
     return NextResponse.json({
-        name: row.name,
-        sex: row.sex,
-        country: row.country,
-        federation: row.federation?.toLowerCase(),
-        weightClass,
-        equipment: row.equipment?.toLowerCase(),
+        name: name_,
+        sex,
+        country,
+        federation: federation?.toLowerCase(),
+        weightClass: weightclasskg ? `${weightclasskg} kg` : null,
+        equipment: equipment?.toLowerCase(),
         division,
-        lastCompetition: row.date,
+        lastCompetition,
     });
 }
-
