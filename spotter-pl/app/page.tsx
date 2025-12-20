@@ -61,6 +61,39 @@ type ResultsState = {
   liftCategory: string;
 };
 
+// type for athlete bests data
+type LiftRecord = {
+  value: number;
+  date: string;
+  meet: string;
+  federation: string;
+};
+
+type AthleteBests = {
+  name: string;
+  totalMeets: number;
+  bestSquat: LiftRecord | null;
+  bestBench: LiftRecord | null;
+  bestDeadlift: LiftRecord | null;
+  bestTotal: LiftRecord | null;
+  bestGoodlift: number | null;
+  bestDots: number | null;
+  recentCompetitions: Array<{
+    date: string;
+    meetName: string;
+    federation: string;
+    equipment: string;
+    weightClass: string;
+    division: string;
+    bodyweight: string;
+    squat: string;
+    bench: string;
+    deadlift: string;
+    total: string;
+    dots: string;
+  }>;
+};
+
 export default function Home() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -78,6 +111,42 @@ export default function Home() {
 
   // results state - only loads when 'Spot me!' is clicked
   const [results, setResults] = useState<ResultsState | null>(null);
+  
+  // athlete data state
+  const [athleteData, setAthleteData] = useState<AthleteBests | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // fetch athlete data when results change
+  useEffect(() => {
+    if (!results?.lifterName) {
+      setAthleteData(null);
+      return;
+    }
+
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set('name', results.lifterName);
+        if (results.federation !== 'all') params.set('federation', results.federation);
+        if (results.equipment !== 'all') params.set('equipment', results.equipment);
+        if (results.weightClass !== 'All classes') params.set('weightClass', results.weightClass);
+        if (results.division !== 'All Divisions') params.set('division', results.division);
+
+        const res = await fetch(`/api/athlete-bests?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          setAthleteData(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch athlete data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [results]);
 
   // url parameters load
   useEffect(() => {
@@ -308,38 +377,161 @@ export default function Home() {
                   results.liftCategory,
                 ].filter(Boolean).join(' • ')}
               </p>
+              {athleteData && (
+                <p className="text-xs opacity-50 mt-1">
+                  {athleteData.totalMeets} competition{athleteData.totalMeets !== 1 ? 's' : ''} on record
+                </p>
+              )}
             </div>
 
-            {/* placeholder for actual results/visualizations */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              <div className="card bg-base-100 shadow-lg">
-                <div className="card-body">
-                  <h3 className="card-title">Best Lifts</h3>
-                  <p className="text-sm opacity-60">Squat, Bench, Deadlift PRs will appear here</p>
-                </div>
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <span className="loading loading-spinner loading-lg"></span>
               </div>
+            ) : (
+              <>
+                {/* best lifts */}
+                <div className="grid gap-4 md:grid-cols-4 mb-8">
+                  {/* squat */}
+                  <div className="card bg-base-100 shadow-lg">
+                    <div className="card-body p-5">
+                      <h3 className="text-xs uppercase tracking-wider opacity-60 font-semibold">Squat</h3>
+                      {athleteData?.bestSquat ? (
+                        <>
+                          <p className="text-3xl font-bold">{athleteData.bestSquat.value} kg</p>
+                          <p className="text-xs opacity-50">{athleteData.bestSquat.date}</p>
+                        </>
+                      ) : (
+                        <p className="text-lg opacity-40">—</p>
+                      )}
+                    </div>
+                  </div>
 
-              <div className="card bg-base-100 shadow-lg">
-                <div className="card-body">
-                  <h3 className="card-title">Rankings</h3>
-                  <p className="text-sm opacity-60">Position in division/weight class</p>
-                </div>
-              </div>
+                  {/* bench */}
+                  <div className="card bg-base-100 shadow-lg">
+                    <div className="card-body p-5">
+                      <h3 className="text-xs uppercase tracking-wider opacity-60 font-semibold">Bench</h3>
+                      {athleteData?.bestBench ? (
+                        <>
+                          <p className="text-3xl font-bold">{athleteData.bestBench.value} kg</p>
+                          <p className="text-xs opacity-50">{athleteData.bestBench.date}</p>
+                        </>
+                      ) : (
+                        <p className="text-lg opacity-40">—</p>
+                      )}
+                    </div>
+                  </div>
 
-              <div className="card bg-base-100 shadow-lg">
-                <div className="card-body">
-                  <h3 className="card-title">Comparison</h3>
-                  <p className="text-sm opacity-60">Compare with other lifters</p>
-                </div>
-              </div>
-            </div>
+                  {/* deadlift */}
+                  <div className="card bg-base-100 shadow-lg">
+                    <div className="card-body p-5">
+                      <h3 className="text-xs uppercase tracking-wider opacity-60 font-semibold">Deadlift</h3>
+                      {athleteData?.bestDeadlift ? (
+                        <>
+                          <p className="text-3xl font-bold">{athleteData.bestDeadlift.value} kg</p>
+                          <p className="text-xs opacity-50">{athleteData.bestDeadlift.date}</p>
+                        </>
+                      ) : (
+                        <p className="text-lg opacity-40">—</p>
+                      )}
+                    </div>
+                  </div>
 
-            <div className="mt-8 card bg-base-100 shadow-lg">
-              <div className="card-body">
-                <h3 className="card-title">Competition History</h3>
-                <p className="text-sm opacity-60">Timeline of meets and progression will appear here</p>
-              </div>
-            </div>
+                  {/* total */}
+                  <div className="card bg-primary text-primary-content shadow-lg">
+                    <div className="card-body p-5">
+                      <h3 className="text-xs uppercase tracking-wider opacity-80 font-semibold">Total</h3>
+                      {athleteData?.bestTotal ? (
+                        <>
+                          <p className="text-3xl font-bold">{athleteData.bestTotal.value} kg</p>
+                          <p className="text-xs opacity-70">{athleteData.bestTotal.date}</p>
+                        </>
+                      ) : (
+                        <p className="text-lg opacity-40">—</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* points */}
+                {(athleteData?.bestGoodlift || athleteData?.bestDots) && (
+                  <div className="grid gap-4 md:grid-cols-2 mb-8">
+                    {athleteData.bestGoodlift && (
+                      <div className="card bg-base-100 shadow-lg">
+                        <div className="card-body p-5">
+                          <h3 className="text-xs uppercase tracking-wider opacity-60 font-semibold">Best Goodlift</h3>
+                          <p className="text-2xl font-bold">{athleteData.bestGoodlift.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    )}
+                    {athleteData.bestDots && (
+                      <div className="card bg-base-100 shadow-lg">
+                        <div className="card-body p-5">
+                          <h3 className="text-xs uppercase tracking-wider opacity-60 font-semibold">Best Dots</h3>
+                          <p className="text-2xl font-bold">{athleteData.bestDots.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* recent competitions */}
+                {athleteData?.recentCompetitions && athleteData.recentCompetitions.length > 0 && (
+                  <div className="card bg-base-100 shadow-lg mb-8">
+                    <div className="card-body">
+                      <h3 className="card-title text-lg">Recent Competitions</h3>
+                      <div className="overflow-x-auto">
+                        <table className="table table-sm">
+                          <thead>
+                            <tr>
+                              <th>Date</th>
+                              <th>Meet</th>
+                              <th>Division</th>
+                              <th className="text-right">SQ</th>
+                              <th className="text-right">BP</th>
+                              <th className="text-right">DL</th>
+                              <th className="text-right">Total</th>
+                              <th className="text-right">Dots</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {athleteData.recentCompetitions.map((comp, idx) => (
+                              <tr key={idx}>
+                                <td className="whitespace-nowrap">{comp.date}</td>
+                                <td className="max-w-48 truncate" title={comp.meetName}>{comp.meetName}</td>
+                                <td>{comp.division || '—'}</td>
+                                <td className="text-right">{comp.squat || '—'}</td>
+                                <td className="text-right">{comp.bench || '—'}</td>
+                                <td className="text-right">{comp.deadlift || '—'}</td>
+                                <td className="text-right font-semibold">{comp.total || '—'}</td>
+                                <td className="text-right">{comp.dots ? parseFloat(comp.dots).toFixed(1) : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* placeholder cards */}
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="card bg-base-100 shadow-lg">
+                    <div className="card-body">
+                      <h3 className="card-title">Rankings</h3>
+                      <p className="text-sm opacity-60">Position in division/weight class coming soon</p>
+                    </div>
+                  </div>
+
+                  <div className="card bg-base-100 shadow-lg">
+                    <div className="card-body">
+                      <h3 className="card-title">Comparison</h3>
+                      <p className="text-sm opacity-60">Compare with other lifters coming soon</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* share button */}
             <div className="mt-8 flex gap-4">
