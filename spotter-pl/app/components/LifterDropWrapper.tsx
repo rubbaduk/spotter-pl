@@ -9,6 +9,7 @@ type Props = {
   setAgeDivision: (value: string) => void;
   setTested: (value: string | null) => void;
   setEquipment: (value: string) => void;
+  setLifterName: (value: string) => void;
 };
 
 export default function LifterSearchBar({
@@ -18,8 +19,12 @@ export default function LifterSearchBar({
   setAgeDivision,
   setTested,
   setEquipment,
+  setLifterName,
 }: Props) {
   const handleLifterSelect = async (lifter: { name: string }) => {
+    // set the lifter name immediately
+    setLifterName(lifter.name);
+
     try {
       // fetch most recent comp
       const res = await fetch(`/api/lifter-details?name=${encodeURIComponent(lifter.name)}`);
