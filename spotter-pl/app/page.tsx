@@ -1,4 +1,7 @@
-import LifterDropdown from '@/app/components/LifterDropdown' 
+'use client';
+
+import { useState } from "react";
+import LifterDropWrapper from "@/app/components/LifterDropWrapper";
 
 import {
   federationGroups,
@@ -22,37 +25,58 @@ const countries = [
   "Uruguay", "US Virgin Islands", "Venezuela", "Vietnam"
 ];
 
-const weightClasses = ["All classes", "52 kg", "57 kg", "63 kg", "74 kg", "83 kg", "93 kg", "105 kg"];
-const ageDivisions = {
-  all: ["All Ages"],
-  youth: ["Youth 5-12", "Teen 13-15", "Teen 16-17", "Teen 18-19"],
-  adult: ["Juniors 20-23", "Seniors 24-34", "Submasters 35-39"],
-  mastersByFives: ["Masters 40-44", "Masters 45-49", "Masters 50-54", "Masters 55-59", "Masters 60-64", "Masters 65-69", "Masters 70-74", "Masters 75-79", "Masters 80-84", "Masters 85-89"],
-  mastersByTens: ["Masters 40-49", "Masters 50-59", "Masters 60-69", "Masters 70-79", "Masters 80+"]
-};
+const weightClasses = [
+  "All classes",
+  // women's classes
+  "43 kg", "44 kg", "47 kg", "48 kg", "52 kg", "56 kg", "57 kg", "60 kg", "63 kg", "67.5 kg", "72 kg", "75 kg", "82.5 kg", "84 kg", "84+ kg", "90 kg", "90+ kg",
+  // men's classes  
+  "53 kg", "59 kg", "66 kg", "74 kg", "83 kg", "93 kg", "100 kg", "105 kg", "110 kg", "120 kg", "120+ kg", "125 kg", "140 kg", "140+ kg",
+];
+const divisions = [
+  "All Divisions",
+  "Open",
+  "Junior",
+  "Sub-Junior",
+  "Masters 1",
+  "Masters 2",
+  "Masters 3",
+  "Masters 4",
+  "Special Olympics"
+];
 
 const liftCategories = {
   lifts: ["Total", "Squat", "Bench", "Deadlift"],
   points: ["GL Points", "Dots", "Glossbrenner", "McCulloch", "Wilks"]
 };
 
+
+
 export default function Home() {
+  const [federation, setFederation] = useState(
+    federationTopOptions[0]?.value ?? "all"
+  );
+  const [country, setCountry] = useState("International");
+  const [weightClass, setWeightClass] = useState("All classes");
+  const [ageDivision, setAgeDivision] = useState("All Divisions");
+  const [tested, setTested] = useState<string | null>(null);
+  const [equipment, setEquipment] = useState("all");
+
   return (
     <div className="min-h-dvh bg-base-100 text-base-content">
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-30">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 min-h-28 sm:min-h-0">
-          <h1 className="text-4xl font-extrabold sm:text-5xl whitespace-nowrap">
+          <h1 className="text-4xl font-bold sm:text-5xl whitespace-nowrap">
             Let's spot
           </h1>
           <div className="form-control flex-1 h-12 mt-2">
-            <LifterDropdown />
-            {/* <input
-              id="u"
-              name="user"
-              type="text"
-              placeholder=""
-              className="w-full ml-1.4 sm:ml-0 outline-none focus:outline-none focus:ring-0 border-0 focus:border-0 text-4xl sm:text-5xl font-extrabold bg-transparent h-full leading-none overflow-hidden whitespace-nowrap"
-            /> */}
+            <LifterDropWrapper
+              setFederation={setFederation}
+              setCountry={setCountry}
+              setWeightClass={setWeightClass}
+              setAgeDivision={setAgeDivision}
+              setTested={setTested}
+              setEquipment={setEquipment}
+            />
           </div>
         </div>
 
@@ -65,7 +89,8 @@ export default function Home() {
             </label>
             <select
               className="select select-bordered w-full outline-none focus:outline-none focus:ring-0"
-              defaultValue={federationTopOptions[0]?.value ?? "all"}
+              value={federation}
+              onChange={(e) => setFederation(e.target.value)}
             >
               {federationTopOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -90,7 +115,11 @@ export default function Home() {
                 Country
               </span>
             </label>
-            <select className="select select-bordered w-full outline-none focus:outline-none focus:ring-0">
+            <select
+              className="select select-bordered w-full outline-none focus:outline-none focus:ring-0"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+            >
               {countries.map((fed) => (
                 <option key={fed}>{fed}</option>
               ))}
@@ -105,7 +134,11 @@ export default function Home() {
                 Weight class
               </span>
             </label>
-            <select className="select select-bordered w-full outline-none focus:outline-none focus:ring-0">
+            <select
+              className="select select-bordered w-full outline-none focus:outline-none focus:ring-0"
+              value={weightClass}
+              onChange={(e) => setWeightClass(e.target.value)}
+            >
               {weightClasses.map((klass) => (
                 <option key={klass}>{klass}</option>
               ))}
@@ -115,29 +148,17 @@ export default function Home() {
           <div className="form-control">
             <label className="label">
               <span className="label-text uppercase text-xs font-semibold tracking-wider">
-                Age division
+                Division
               </span>
             </label>
-            <select className="select select-bordered w-full outline-none focus:outline-none focus:ring-0">
-              {ageDivisions.all.map((division) => (
+            <select
+              className="select select-bordered w-full outline-none focus:outline-none focus:ring-0"
+              value={ageDivision}
+              onChange={(e) => setAgeDivision(e.target.value)}
+            >
+              {divisions.map((division) => (
                 <option key={division}>{division}</option>
               ))}
-              {ageDivisions.youth.map((division) => (
-                <option key={division}>{division}</option>
-              ))}
-              {ageDivisions.adult.map((division) => (
-                <option key={division}>{division}</option>
-              ))}
-              <optgroup label="Masters by 5s">
-                {ageDivisions.mastersByFives.map((division) => (
-                  <option key={division}>{division}</option>
-                ))}
-              </optgroup>
-              <optgroup label="Masters by 10s">
-                {ageDivisions.mastersByTens.map((division) => (
-                  <option key={division}>{division}</option>
-                ))}
-              </optgroup>
             </select>
           </div>
 

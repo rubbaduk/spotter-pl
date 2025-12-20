@@ -11,6 +11,7 @@ type Lifter = {
     federations?: string[];
     meets_count?: number;
     score?: number;
+    age_division?: string;
 };
 
 type Props = {
@@ -29,6 +30,7 @@ export default function LifterAutosuggest({
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<Lifter[]>([]);
     const [highlight, setHighlight] = useState(0);
+    const justSelectedRef = useRef(false); // use ref to prevent re-search after selection
     const rootRef = useRef<HTMLDivElement>(null);
     const listId = 'lifter-suggest-list';
 
@@ -44,6 +46,12 @@ export default function LifterAutosuggest({
 
   // debounced fetch
   useEffect(() => {
+    // skip search if we just selected an item
+    if (justSelectedRef.current) {
+        justSelectedRef.current = false;
+        return;
+    }
+
     if (q.trim().length < 2) {
         setResults([]);
         setOpen(false);
@@ -79,13 +87,16 @@ export default function LifterAutosuggest({
     (idx: number) => {
         const item = results[idx];
         if (!item) return;
+        justSelectedRef.current = true; // prevent re-search when q changes
         setQ(item.name);
         setOpen(false);
+        setResults([]); // clear results to prevent dropdown from showing again
         onSelect?.(item);
     },
     [results, onSelect]
   );
 
+//   keyboard stuff
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         setOpen(true);
@@ -157,14 +168,15 @@ export default function LifterAutosuggest({
               results.map((r, idx) => {
                 const isActive = idx === highlight;
                 const sub =
-                  [
+                    [
                     r.sex ? `• ${r.sex}` : null,
                     r.country ? `• ${r.country}` : null,
+                    
                     r.earliest_year && r.latest_year
-                      ? `• ${r.earliest_year}–${r.latest_year}`
-                      : null,
+                        ? `• ${r.earliest_year}–${r.latest_year}`
+                        : null,
                     r.meets_count ? `• ${r.meets_count} meets` : null,
-                  ]
+                    ]
                     .filter(Boolean)
                     .join(' ');
 
