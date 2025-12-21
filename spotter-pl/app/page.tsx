@@ -94,6 +94,17 @@ type AthleteBests = {
   }>;
 };
 
+type AthleteRanking = {
+  name: string;
+  currentRank: number | null;
+  allTimeRank: number | null;
+  totalCurrent: number;
+  totalAllTime: number;
+  liftCategory: string;
+  athleteBest: number;
+  isPoints?: boolean;
+};
+
 export default function Home() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -114,12 +125,14 @@ export default function Home() {
   
   // athlete data state
   const [athleteData, setAthleteData] = useState<AthleteBests | null>(null);
+  const [rankingData, setRankingData] = useState<AthleteRanking | null>(null);
   const [loading, setLoading] = useState(false);
 
   // fetch athlete data when results change
   useEffect(() => {
     if (!results?.lifterName) {
       setAthleteData(null);
+      setRankingData(null);
       return;
     }
 
@@ -132,11 +145,22 @@ export default function Home() {
         if (results.equipment !== 'all') params.set('equipment', results.equipment);
         if (results.weightClass !== 'All classes') params.set('weightClass', results.weightClass);
         if (results.division !== 'All Divisions') params.set('division', results.division);
+        params.set('lift', results.liftCategory);
 
-        const res = await fetch(`/api/athlete-bests?${params}`);
-        if (res.ok) {
-          const data = await res.json();
+        // fetch both bests and ranking in parallel
+        const [bestsRes, rankingRes] = await Promise.all([
+          fetch(`/api/athlete-bests?${params}`),
+          fetch(`/api/athlete-ranking?${params}`),
+        ]);
+
+        if (bestsRes.ok) {
+          const data = await bestsRes.json();
           setAthleteData(data);
+        }
+
+        if (rankingRes.ok) {
+          const ranking = await rankingRes.json();
+          setRankingData(ranking);
         }
       } catch (error) {
         console.error('Failed to fetch athlete data:', error);
@@ -348,6 +372,7 @@ export default function Home() {
           type="button" 
           className="btn btn-primary w-full sm:w-auto"
           onClick={handleSpotMe}
+          disabled={!lifterName.trim()}
         >
           Spot me!
         </button>
@@ -472,6 +497,75 @@ export default function Home() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* ranking and comparison blocks */}
+                {rankingData && (
+                  <div className="grid gap-6 md:grid-cols-2 mb-8">
+                    {/* current rankings */}
+                    <div className="card bg-base-100 shadow-lg">
+                      <div className="card-body">
+                        <h3 className="card-title text-lg">Current Rankings</h3>
+                        {rankingData.currentRank ? (
+                          <div className="space-y-2">
+                            <p className="text-3xl font-bold">
+                              {rankingData.currentRank}
+                              <span className="text-lg font-normal opacity-60">
+                                {rankingData.currentRank === 1 ? 'st' : 
+                                 rankingData.currentRank === 2 ? 'nd' : 
+                                 rankingData.currentRank === 3 ? 'rd' : 'th'}
+                              </span>
+                            </p>
+                            <p className="text-sm opacity-70">
+                              out of {rankingData.totalCurrent} lifters
+                            </p>
+                            <p className="text-xs opacity-50 mt-2">
+                              {results.weightClass !== 'All classes' && results.weightClass} 
+                              {results.division !== 'All Divisions' && ` • ${results.division}`}
+                              {results.federation !== 'all' && ` • ${results.federation.toUpperCase()}`}
+                            </p>
+                            <p className="text-xs opacity-50">
+                              Best {results.liftCategory}: {rankingData.athleteBest.toFixed(2)}{rankingData.isPoints ? ' pts' : ' kg'}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm opacity-60">No current rankings available</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* all-time rankings */}
+                    <div className="card bg-base-100 shadow-lg">
+                      <div className="card-body">
+                        <h3 className="card-title text-lg">All-Time Rankings</h3>
+                        {rankingData.allTimeRank ? (
+                          <div className="space-y-2">
+                            <p className="text-3xl font-bold">
+                              {rankingData.allTimeRank}
+                              <span className="text-lg font-normal opacity-60">
+                                {rankingData.allTimeRank === 1 ? 'st' : 
+                                 rankingData.allTimeRank === 2 ? 'nd' : 
+                                 rankingData.allTimeRank === 3 ? 'rd' : 'th'}
+                              </span>
+                            </p>
+                            <p className="text-sm opacity-70">
+                              out of {rankingData.totalAllTime} lifters
+                            </p>
+                            <p className="text-xs opacity-50 mt-2">
+                              {results.weightClass !== 'All classes' && results.weightClass} 
+                              {results.division !== 'All Divisions' && ` • ${results.division}`}
+                              {results.federation !== 'all' && ` • ${results.federation.toUpperCase()}`}
+                            </p>
+                            <p className="text-xs opacity-50">
+                              Best {results.liftCategory}: {rankingData.athleteBest.toFixed(2)}{rankingData.isPoints ? ' pts' : ' kg'}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm opacity-60">No all-time rankings available</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 

@@ -2,6 +2,7 @@
 
 notes.txt
 
+
 # dependencies
 /node_modules
 /.pnp
@@ -14,6 +15,7 @@ notes.txt
 
 # testing
 /coverage
+app/api/tests
 
 # next.js
 /.next/
