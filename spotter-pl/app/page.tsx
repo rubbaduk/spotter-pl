@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import LifterDropWrapper from "@/app/components/LifterDropWrapper";
 import ProgressionChart from "@/app/components/ProgressionChart";
+import Navigation from "@/app/components/Navigation";
 
 import {
   federationGroups,
@@ -397,8 +398,9 @@ function HomeContent() {
 
   return (
     <div className="min-h-dvh bg-base-100 text-base-content">
+      <Navigation />
       {/* search section - full viewport height */}
-      <main className="min-h-dvh mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-30">
+      <main className="min-h-dvh mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-30 pt-24">
         <div className="flex flex-col gap-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 min-h-28 sm:min-h-0">
             <h1 className="text-4xl font-bold sm:text-5xl whitespace-nowrap">

@@ -92,7 +92,7 @@ export default function ProgressionChart({ data, athleteName }: ProgressionChart
             </button>
             <button
               onClick={() => toggleLine('total')}
-              className={`btn btn-xs ${visibleLines.total ? 'btn-secondary' : 'btn-ghost'}`}
+              className={`btn btn-xs ${visibleLines.total ? 'bg-[#8b5cf6]' : 'btn-ghost'}`}
             >
               Total
             </button>
