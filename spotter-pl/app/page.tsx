@@ -8,6 +8,7 @@ import {
   federationGroups,
   federationTopOptions,
 } from "@/data/federations";
+import { calculateDots, calculateWilks, calculateGlossbrenner, calculateGoodlift } from '@/lib/points';
 
 // IMPORT OPTIONS FROM OPENPL - CSV OR MANUALLY ENTER
 // - store all new instances from csv into object
@@ -175,8 +176,10 @@ function HomeContent() {
             bestBench: results.manualBench ? { value: results.manualBench, date: "Manual Entry", meet: "", federation: "" } : null,
             bestDeadlift: results.manualDeadlift ? { value: results.manualDeadlift, date: "Manual Entry", meet: "", federation: "" } : null,
             bestTotal: manualTotal > 0 ? { value: manualTotal, date: "Manual Entry", meet: "", federation: "" } : null,
-            bestGoodlift: null,
-            bestDots: null,
+            bestGoodlift: manualTotal > 0 && results.manualBodyweight && results.manualGender ? 
+              calculateGoodlift(results.manualGender, results.equipment || 'Raw', false, results.manualBodyweight, manualTotal) : null,
+            bestDots: manualTotal > 0 && results.manualBodyweight && results.manualGender ? 
+              calculateDots(results.manualGender, results.manualBodyweight, manualTotal) : null,
             recentCompetitions: [],
           });
 

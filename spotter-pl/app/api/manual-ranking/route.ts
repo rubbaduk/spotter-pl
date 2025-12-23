@@ -1,5 +1,6 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { calculateDots, calculateWilks, calculateGlossbrenner, calculateGoodlift } from '@/lib/points';
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
@@ -11,7 +12,7 @@ export async function GET(req: Request) {
     const gender = searchParams.get('gender') as 'male' | 'female' | null;
     
     const federation = searchParams.get('federation');
-    const equipment = searchParams.get('equipment');
+    const equipment = searchParams.get('equipment') || 'Raw';
     const weightClass = searchParams.get('weightClass');
     const division = searchParams.get('division');
     const liftCategory = searchParams.get('lift') || 'Total';
@@ -62,8 +63,25 @@ export async function GET(req: Request) {
             rankColumn = 'wilks';
         }
         isPoints = true;
-        // TODO: POINTS CALCULATIONS. USE TOTAL AS PLACEHOLDER INSTEAD FOR RANKINGS
-        athleteBest = squat + bench + deadlift;
+        // Calculate actual points based on the formula
+        const total = squat + bench + deadlift;
+        
+        switch(liftCategory) {
+            case 'GL Points':
+                athleteBest = calculateGoodlift(gender!, equipment, false, bodyweight, total);
+                break;
+            case 'Dots':
+                athleteBest = calculateDots(gender!, bodyweight, total);
+                break;
+            case 'Glossbrenner':
+                athleteBest = calculateGlossbrenner(gender!, bodyweight, total);
+                break;
+            case 'Wilks':
+                athleteBest = calculateWilks(gender!, bodyweight, total);
+                break;
+            default:
+                athleteBest = total;
+        }
     }
 
     if (athleteBest === 0) {
