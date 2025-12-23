@@ -64,28 +64,31 @@ export async function GET(req: Request) {
     }
 
     if (division && division !== 'All Divisions') {
-        baseConditions.push(`division = $${baseParams.length + 1}`);
-        baseParams.push(division);
+        if (division === 'Junior') {
+            baseConditions.push(`(division = $${baseParams.length + 1} OR division = $${baseParams.length + 2})`);
+            baseParams.push('Junior', 'Juniors');
+        } else if (division === 'Sub-Junior') {
+            baseConditions.push(`(division = $${baseParams.length + 1} OR division = $${baseParams.length + 2})`);
+            baseParams.push('Sub-Junior', 'Sub-Juniors');
+        } else {
+            baseConditions.push(`division = $${baseParams.length + 1}`);
+            baseParams.push(division);
+        }
     }
 
     const baseWhere = baseConditions.length > 0 
         ? `WHERE ${baseConditions.join(' AND ')}`
         : '';
 
-    // get athlete's best
-    const athleteConditions = [...baseConditions];
-    athleteConditions.push(`name = $${baseParams.length + 1}`);
-    const athleteParams = [...baseParams, name];
-    const athleteWhere = `WHERE ${athleteConditions.join(' AND ')}`;
-
+    // get athlete's best lifts
     const athleteQuery = `
         SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
         FROM opl.opl_raw
-        ${athleteWhere}
+        WHERE name = $1
         AND CAST(${rankColumn} AS FLOAT) > 0
     `;
 
-    const athleteResult = await pool.query(athleteQuery, athleteParams);
+    const athleteResult = await pool.query(athleteQuery, [name]);
     const athleteBest = parseFloat(athleteResult.rows[0]?.best_value) || 0;
 
     if (athleteBest === 0) {
@@ -96,6 +99,7 @@ export async function GET(req: Request) {
             totalCurrent: 0,
             totalAllTime: 0,
             liftCategory,
+            isPoints,
         });
     }
 
@@ -122,28 +126,17 @@ export async function GET(req: Request) {
     const currentCountResult = await pool.query(currentCountQuery, currentParams);
     const totalCurrent = parseInt(currentCountResult.rows[0]?.total || '0', 10);
 
-    // athletes position in rankings
+    // athletes position in current rankings (count athletes with better values)
     const currentRankingQuery = `
-        WITH ranked_lifters AS (
-            SELECT 
-                name,
-                MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
-                ROW_NUMBER() OVER (ORDER BY MAX(CAST(${rankColumn} AS FLOAT)) DESC) as rank
-            FROM opl.opl_raw
-            ${currentWhere}
-            AND CAST(${rankColumn} AS FLOAT) > 0
-            GROUP BY name
-        )
-        SELECT name, best_value, rank
-        FROM ranked_lifters
-        WHERE name = $${currentParams.length + 1}
+        SELECT COUNT(DISTINCT name) + 1 as rank
+        FROM opl.opl_raw
+        ${currentWhere}
+        AND CAST(${rankColumn} AS FLOAT) > $${currentParams.length + 1}
     `;
-    const currentRankingParams = [...currentParams, name];
+    const currentRankingParams = [...currentParams, athleteBest];
     const currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
     
-    const currentRank = currentRankingResult.rows.length > 0 
-        ? currentRankingResult.rows[0].rank 
-        : null;
+    const currentRank = currentRankingResult.rows[0]?.rank || null;
 
     // all time rankings
     // count all lifters in all-time category 
@@ -156,32 +149,21 @@ export async function GET(req: Request) {
     const allTimeCountResult = await pool.query(allTimeCountQuery, baseParams);
     const totalAllTime = parseInt(allTimeCountResult.rows[0]?.total || '0', 10);
 
-    // get all-time rankings with athlete's position using window function
+    // get all-time rankings
     const allTimeRankingQuery = `
-        WITH ranked_lifters AS (
-            SELECT 
-                name,
-                MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
-                ROW_NUMBER() OVER (ORDER BY MAX(CAST(${rankColumn} AS FLOAT)) DESC) as rank
-            FROM opl.opl_raw
-            ${baseWhere}
-            AND CAST(${rankColumn} AS FLOAT) > 0
-            GROUP BY name
-        )
-        SELECT name, best_value, rank
-        FROM ranked_lifters
-        WHERE name = $${baseParams.length + 1}
+        SELECT COUNT(DISTINCT name) + 1 as rank
+        FROM opl.opl_raw
+        ${baseWhere}
+        AND CAST(${rankColumn} AS FLOAT) > $${baseParams.length + 1}
     `;
-    const allTimeRankingParams = [...baseParams, name];
+    const allTimeRankingParams = [...baseParams, athleteBest];
     const allTimeRankingResult = await pool.query(allTimeRankingQuery, allTimeRankingParams);
     
-    const allTimeRank = allTimeRankingResult.rows.length > 0 
-        ? allTimeRankingResult.rows[0].rank 
-        : null;
-
+    const allTimeRank = allTimeRankingResult.rows[0]?.rank || null;
+    
     return NextResponse.json({
         name,
-        currentRank,
+        currentRank: currentRankingResult.rows[0]?.rank || null,
         allTimeRank,
         totalCurrent,
         totalAllTime,

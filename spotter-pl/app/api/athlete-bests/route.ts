@@ -41,16 +41,26 @@ export async function GET(req: Request) {
     }
 
     if (division && division !== 'All Divisions') {
-        filterConditions.push(`division = $${paramIndex}`);
-        params.push(division);
-        paramIndex++;
+        if (division === 'Junior') {
+            filterConditions.push(`(division = $${paramIndex} OR division = $${paramIndex + 1})`);
+            params.push('Junior', 'Juniors');
+            paramIndex += 2;
+        } else if (division === 'Sub-Junior') {
+            filterConditions.push(`(division = $${paramIndex} OR division = $${paramIndex + 1})`);
+            params.push('Sub-Junior', 'Sub-Juniors');
+            paramIndex += 2;
+        } else {
+            filterConditions.push(`division = $${paramIndex}`);
+            params.push(division);
+            paramIndex++;
+        }
     }
 
     const whereClause = filterConditions.join(' AND ');
 
-
+    // get athlete's ALL-TIME best lifts
     const bestsQuery = `
-        WITH filtered_data AS (
+        WITH athlete_data AS (
             SELECT 
                 CAST(best3squatkg AS FLOAT) as squat,
                 CAST(best3benchkg AS FLOAT) as bench,
@@ -58,38 +68,38 @@ export async function GET(req: Request) {
                 CAST(totalkg AS FLOAT) as total,
                 CAST(goodlift AS FLOAT) as goodlift,
                 CAST(dots AS FLOAT) as dots,
-                date,
                 meetname,
+                date,
                 federation
             FROM opl.opl_raw
-            WHERE ${whereClause}
+            WHERE name = $1
             AND CAST(best3squatkg AS FLOAT) > 0
         )
         SELECT 
             (SELECT jsonb_build_object('value', squat, 'date', date, 'meet', meetname, 'federation', federation)
-             FROM filtered_data ORDER BY squat DESC, date DESC LIMIT 1) as best_squat,
+             FROM athlete_data ORDER BY squat DESC, date DESC LIMIT 1) as best_squat,
             (SELECT jsonb_build_object('value', bench, 'date', date, 'meet', meetname, 'federation', federation)
-             FROM filtered_data ORDER BY bench DESC, date DESC LIMIT 1) as best_bench,
+             FROM athlete_data ORDER BY bench DESC, date DESC LIMIT 1) as best_bench,
             (SELECT jsonb_build_object('value', deadlift, 'date', date, 'meet', meetname, 'federation', federation)
-             FROM filtered_data ORDER BY deadlift DESC, date DESC LIMIT 1) as best_deadlift,
+             FROM athlete_data ORDER BY deadlift DESC, date DESC LIMIT 1) as best_deadlift,
             (SELECT jsonb_build_object('value', total, 'date', date, 'meet', meetname, 'federation', federation)
-             FROM filtered_data ORDER BY total DESC, date DESC LIMIT 1) as best_total,
+             FROM athlete_data ORDER BY total DESC, date DESC LIMIT 1) as best_total,
             MAX(goodlift) as best_goodlift,
             MAX(dots) as best_dots
-        FROM filtered_data
+        FROM athlete_data
     `;
 
-    const bestsResult = await pool.query(bestsQuery, params);
-    const bestsRow = bestsResult.rows[0] || {};
+    const bestsResult = await pool.query(bestsQuery, [name]);
+    const bests = bestsResult.rows[0];
 
-    const bestSquat = bestsRow.best_squat && bestsRow.best_squat.value > 0 ? bestsRow.best_squat : null;
-    const bestBench = bestsRow.best_bench && bestsRow.best_bench.value > 0 ? bestsRow.best_bench : null;
-    const bestDeadlift = bestsRow.best_deadlift && bestsRow.best_deadlift.value > 0 ? bestsRow.best_deadlift : null;
-    const bestTotal = bestsRow.best_total && bestsRow.best_total.value > 0 ? bestsRow.best_total : null;
-    const bestGoodlift = bestsRow.best_goodlift > 0 ? bestsRow.best_goodlift : null;
-    const bestDots = bestsRow.best_dots > 0 ? bestsRow.best_dots : null;
+    const bestSquat = bests.best_squat && bests.best_squat.value > 0 ? bests.best_squat : null;
+    const bestBench = bests.best_bench && bests.best_bench.value > 0 ? bests.best_bench : null;
+    const bestDeadlift = bests.best_deadlift && bests.best_deadlift.value > 0 ? bests.best_deadlift : null;
+    const bestTotal = bests.best_total && bests.best_total.value > 0 ? bests.best_total : null;
+    const bestGoodlift = bests.best_goodlift > 0 ? bests.best_goodlift : null;
+    const bestDots = bests.best_dots > 0 ? bests.best_dots : null;
 
-    // get recent competitions (last 5) - IGNORE ALL FILTERS, just get most recent 5
+    // get last 5 comps
     const recentCompsQuery = `
         SELECT 
             date,
@@ -126,7 +136,7 @@ export async function GET(req: Request) {
         dots: row.dots,
     }));
 
-    // get total meets count (all competitions, regardless of filters)
+    // get total meets count
     const totalMeetsQuery = `
         SELECT COUNT(*) as total
         FROM opl.opl_raw

@@ -117,8 +117,16 @@ export async function GET(req: Request) {
     }
 
     if (division && division !== 'All Divisions') {
-        baseConditions.push(`division = $${baseParams.length + 1}`);
-        baseParams.push(division);
+        if (division === 'Junior') {
+            baseConditions.push(`(division = $${baseParams.length + 1} OR division = $${baseParams.length + 2})`);
+            baseParams.push('Junior', 'Juniors');
+        } else if (division === 'Sub-Junior') {
+            baseConditions.push(`(division = $${baseParams.length + 1} OR division = $${baseParams.length + 2})`);
+            baseParams.push('Sub-Junior', 'Sub-Juniors');
+        } else {
+            baseConditions.push(`division = $${baseParams.length + 1}`);
+            baseParams.push(division);
+        }
     }
 
     const baseWhere = baseConditions.length > 0 

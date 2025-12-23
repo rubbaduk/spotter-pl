@@ -8,6 +8,7 @@ import {
   federationGroups,
   federationTopOptions,
 } from "@/data/federations";
+import { getCountryForFederation } from "@/data/federationCountryMap";
 import { calculateDots, calculateWilks, calculateGlossbrenner, calculateGoodlift } from '@/lib/points';
 
 // IMPORT OPTIONS FROM OPENPL - CSV OR MANUALLY ENTER
@@ -244,6 +245,14 @@ function HomeContent() {
 
     fetchData();
   }, [results]);
+
+  // auto-select country when federation changes
+  useEffect(() => {
+    if (federation && federation !== 'all') {
+      const newCountry = getCountryForFederation(federation);
+      setCountry(newCountry);
+    }
+  }, [federation]);
 
   // url parameters load
   useEffect(() => {
@@ -533,7 +542,7 @@ function HomeContent() {
               ))}
             </select>
           </div>
-          
+
           <div className="form-control">
             <label className="label">
               <span className="label-text uppercase text-xs font-semibold tracking-wider">
