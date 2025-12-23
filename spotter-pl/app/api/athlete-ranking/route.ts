@@ -99,7 +99,7 @@ export async function GET(req: Request) {
         });
     }
 
-    // CURRENT RANKINGS (current year only)
+    // current rankings (current year only)
     const currentYear = new Date().getFullYear();
     const currentYearStr = currentYear.toString();
     
@@ -112,7 +112,7 @@ export async function GET(req: Request) {
         ? `WHERE ${currentConditions.join(' AND ')}`
         : '';
 
-    // Count ALL lifters in current category (for "out of X")
+    // count all lifters in current category
     const currentCountQuery = `
         SELECT COUNT(DISTINCT name) as total
         FROM opl.opl_raw
@@ -122,7 +122,7 @@ export async function GET(req: Request) {
     const currentCountResult = await pool.query(currentCountQuery, currentParams);
     const totalCurrent = parseInt(currentCountResult.rows[0]?.total || '0', 10);
 
-    // Get rankings with athlete's position using window function
+    // athletes position in rankings
     const currentRankingQuery = `
         WITH ranked_lifters AS (
             SELECT 
@@ -145,8 +145,8 @@ export async function GET(req: Request) {
         ? currentRankingResult.rows[0].rank 
         : null;
 
-    // ALL-TIME RANKINGS
-    // Count ALL lifters in all-time category (for "out of X")
+    // all time rankings
+    // count all lifters in all-time category 
     const allTimeCountQuery = `
         SELECT COUNT(DISTINCT name) as total
         FROM opl.opl_raw
@@ -156,7 +156,7 @@ export async function GET(req: Request) {
     const allTimeCountResult = await pool.query(allTimeCountQuery, baseParams);
     const totalAllTime = parseInt(allTimeCountResult.rows[0]?.total || '0', 10);
 
-    // Get all-time rankings with athlete's position using window function
+    // get all-time rankings with athlete's position using window function
     const allTimeRankingQuery = `
         WITH ranked_lifters AS (
             SELECT 

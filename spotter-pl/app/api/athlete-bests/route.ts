@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     const weightClass = searchParams.get('weightClass');
     const division = searchParams.get('division');
 
-    // Build filter conditions and parameters
+    // filter conditions and parameters
     const filterConditions: string[] = ['name = $1'];
     const params: (string | null)[] = [name];
     let paramIndex = 2;
@@ -48,8 +48,7 @@ export async function GET(req: Request) {
 
     const whereClause = filterConditions.join(' AND ');
 
-    // Optimized: Use SQL aggregation with DISTINCT ON to find bests efficiently
-    // This performs the aggregation in the database instead of fetching all rows
+
     const bestsQuery = `
         WITH filtered_data AS (
             SELECT 
@@ -91,7 +90,6 @@ export async function GET(req: Request) {
     const bestDots = bestsRow.best_dots > 0 ? bestsRow.best_dots : null;
 
     // get recent competitions (last 5) - IGNORE ALL FILTERS, just get most recent 5
-    // This query uses the name index for fast lookup
     const recentCompsQuery = `
         SELECT 
             date,
@@ -129,7 +127,6 @@ export async function GET(req: Request) {
     }));
 
     // get total meets count (all competitions, regardless of filters)
-    // This query uses the name index for fast lookup
     const totalMeetsQuery = `
         SELECT COUNT(*) as total
         FROM opl.opl_raw

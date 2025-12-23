@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import LifterDropWrapper from "@/app/components/LifterDropWrapper";
 
@@ -24,6 +24,16 @@ const countries = [
   "Russia", "Saudi Arabia", "Serbia", "Singapore", "Slovakia", "Slovenia", "South Africa", "South Korea", "Spain", "Sri Lanka",
   "Sweden", "Switzerland", "Syria", "Taiwan", "Trinidad and Tobago", "Thailand", "Türkiye", "UAE", "Uganda", "Ukraine",
   "Uruguay", "US Virgin Islands", "Venezuela", "Vietnam"
+];
+
+const femaleWeightClasses = [
+  "All classes",
+  "43 kg", "44 kg", "47 kg", "48 kg", "52 kg", "56 kg", "57 kg", "60 kg", "63 kg", "67.5 kg", "72 kg", "75 kg", "82.5 kg", "84 kg", "84+ kg", "90 kg", "90+ kg",
+];
+
+const maleWeightClasses = [
+  "All classes",
+  "53 kg", "59 kg", "66 kg", "74 kg", "83 kg", "93 kg", "100 kg", "105 kg", "110 kg", "120 kg", "120+ kg", "125 kg", "140 kg", "140+ kg",
 ];
 
 const weightClasses = [
@@ -59,6 +69,12 @@ type ResultsState = {
   division: string;
   equipment: string;
   liftCategory: string;
+  isManualEntry?: boolean;
+  manualSquat?: number;
+  manualBench?: number;
+  manualDeadlift?: number;
+  manualBodyweight?: number;
+  manualGender?: "male" | "female";
 };
 
 // type for athlete bests data
@@ -103,9 +119,10 @@ type AthleteRanking = {
   liftCategory: string;
   athleteBest: number;
   isPoints?: boolean;
+  message?: string;
 };
 
-export default function Home() {
+function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resultsRef = useRef<HTMLElement>(null);
@@ -119,6 +136,14 @@ export default function Home() {
   const [tested, setTested] = useState<string | null>(null);
   const [equipment, setEquipment] = useState("all");
   const [liftCategory, setLiftCategory] = useState("Total");
+  
+  // manual entry state
+  const [isManualEntry, setIsManualEntry] = useState(false);
+  const [manualSquat, setManualSquat] = useState<string>("");
+  const [manualBench, setManualBench] = useState<string>("");
+  const [manualDeadlift, setManualDeadlift] = useState<string>("");
+  const [manualBodyweight, setManualBodyweight] = useState<string>("");
+  const [manualGender, setManualGender] = useState<"male" | "female" | null>(null);
 
   // results state - only loads when 'Spot me!' is clicked
   const [results, setResults] = useState<ResultsState | null>(null);
@@ -130,7 +155,7 @@ export default function Home() {
 
   // fetch athlete data when results change
   useEffect(() => {
-    if (!results?.lifterName) {
+    if (!results) {
       setAthleteData(null);
       setRankingData(null);
       return;
@@ -139,28 +164,73 @@ export default function Home() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        params.set('name', results.lifterName);
-        if (results.federation !== 'all') params.set('federation', results.federation);
-        if (results.equipment !== 'all') params.set('equipment', results.equipment);
-        if (results.weightClass !== 'All classes') params.set('weightClass', results.weightClass);
-        if (results.division !== 'All Divisions') params.set('division', results.division);
-        params.set('lift', results.liftCategory);
+        // handle manual entry mode
+        if (results.isManualEntry) {
+          // create mock athlete data from manual inputs
+          const manualTotal = (results.manualSquat || 0) + (results.manualBench || 0) + (results.manualDeadlift || 0);
+          setAthleteData({
+            name: results.lifterName || "Manual Entry",
+            totalMeets: 0,
+            bestSquat: results.manualSquat ? { value: results.manualSquat, date: "Manual Entry", meet: "", federation: "" } : null,
+            bestBench: results.manualBench ? { value: results.manualBench, date: "Manual Entry", meet: "", federation: "" } : null,
+            bestDeadlift: results.manualDeadlift ? { value: results.manualDeadlift, date: "Manual Entry", meet: "", federation: "" } : null,
+            bestTotal: manualTotal > 0 ? { value: manualTotal, date: "Manual Entry", meet: "", federation: "" } : null,
+            bestGoodlift: null,
+            bestDots: null,
+            recentCompetitions: [],
+          });
 
-        // fetch both bests and ranking in parallel
-        const [bestsRes, rankingRes] = await Promise.all([
-          fetch(`/api/athlete-bests?${params}`),
-          fetch(`/api/athlete-ranking?${params}`),
-        ]);
+          // fetch ranking using manual entry API
+          const rankParams = new URLSearchParams();
+          if (results.federation !== 'all') rankParams.set('federation', results.federation);
+          if (results.equipment !== 'all') rankParams.set('equipment', results.equipment);
+          if (results.weightClass !== 'All classes') rankParams.set('weightClass', results.weightClass);
+          if (results.division !== 'All Divisions') rankParams.set('division', results.division);
+          rankParams.set('lift', results.liftCategory);
+          
+          // add manual lift values
+          if (results.manualSquat) rankParams.set('squat', results.manualSquat.toString());
+          if (results.manualBench) rankParams.set('bench', results.manualBench.toString());
+          if (results.manualDeadlift) rankParams.set('deadlift', results.manualDeadlift.toString());
+          if (results.manualBodyweight) rankParams.set('bodyweight', results.manualBodyweight.toString());
+          if (results.manualGender) rankParams.set('gender', results.manualGender);
 
-        if (bestsRes.ok) {
-          const data = await bestsRes.json();
-          setAthleteData(data);
-        }
+          const rankingRes = await fetch(`/api/manual-ranking?${rankParams}`);
+          if (rankingRes.ok) {
+            const ranking = await rankingRes.json();
+            setRankingData(ranking);
+          }
+        } else {
+          // normal mode - fetch from openpowerlifting
+          if (!results.lifterName) {
+            setAthleteData(null);
+            setRankingData(null);
+            return;
+          }
 
-        if (rankingRes.ok) {
-          const ranking = await rankingRes.json();
-          setRankingData(ranking);
+          const params = new URLSearchParams();
+          params.set('name', results.lifterName);
+          if (results.federation !== 'all') params.set('federation', results.federation);
+          if (results.equipment !== 'all') params.set('equipment', results.equipment);
+          if (results.weightClass !== 'All classes') params.set('weightClass', results.weightClass);
+          if (results.division !== 'All Divisions') params.set('division', results.division);
+          params.set('lift', results.liftCategory);
+
+          // fetch both bests and ranking in parallel
+          const [bestsRes, rankingRes] = await Promise.all([
+            fetch(`/api/athlete-bests?${params}`),
+            fetch(`/api/athlete-ranking?${params}`),
+          ]);
+
+          if (bestsRes.ok) {
+            const data = await bestsRes.json();
+            setAthleteData(data);
+          }
+
+          if (rankingRes.ok) {
+            const ranking = await rankingRes.json();
+            setRankingData(ranking);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch athlete data:', error);
@@ -181,6 +251,12 @@ export default function Home() {
     const div = searchParams.get('division');
     const eq = searchParams.get('equipment');
     const lift = searchParams.get('lift');
+    const manual = searchParams.get('manual') === 'true';
+    const squat = searchParams.get('squat');
+    const bench = searchParams.get('bench');
+    const deadlift = searchParams.get('deadlift');
+    const bodyweight = searchParams.get('bodyweight');
+    const gender = searchParams.get('gender') as "male" | "female" | null;
 
     // set form state
     if (name) setLifterName(name);
@@ -190,9 +266,19 @@ export default function Home() {
     if (div) setAgeDivision(div);
     if (eq) setEquipment(eq);
     if (lift) setLiftCategory(lift);
+    
+    // set manual entry state
+    setIsManualEntry(manual);
+    if (manual) {
+      if (squat) setManualSquat(squat);
+      if (bench) setManualBench(bench);
+      if (deadlift) setManualDeadlift(deadlift);
+      if (bodyweight) setManualBodyweight(bodyweight);
+      if (gender) setManualGender(gender);
+    }
 
     // if we have URL params, commit to results state and scroll
-    if (name || fed || ctry || wc || div) {
+    if (name || fed || ctry || wc || div || manual) {
       setResults({
         lifterName: name || "",
         federation: fed || "all",
@@ -201,6 +287,12 @@ export default function Home() {
         division: div || "All Divisions",
         equipment: eq || "all",
         liftCategory: lift || "Total",
+        isManualEntry: manual,
+        manualSquat: squat ? parseFloat(squat) : undefined,
+        manualBench: bench ? parseFloat(bench) : undefined,
+        manualDeadlift: deadlift ? parseFloat(deadlift) : undefined,
+        manualBodyweight: bodyweight ? parseFloat(bodyweight) : undefined,
+        manualGender: gender || undefined,
       });
       // delay scroll to allow render
       setTimeout(() => {
@@ -213,7 +305,19 @@ export default function Home() {
   const handleSpotMe = () => {
     // build URL params
     const params = new URLSearchParams();
-    if (lifterName) params.set('name', lifterName);
+    
+    if (isManualEntry) {
+      params.set('manual', 'true');
+      if (lifterName) params.set('name', lifterName);
+      if (manualSquat) params.set('squat', manualSquat);
+      if (manualBench) params.set('bench', manualBench);
+      if (manualDeadlift) params.set('deadlift', manualDeadlift);
+      if (manualBodyweight) params.set('bodyweight', manualBodyweight);
+      if (manualGender) params.set('gender', manualGender);
+    } else {
+      if (lifterName) params.set('name', lifterName);
+    }
+    
     if (federation && federation !== 'all') params.set('federation', federation);
     if (country && country !== 'International') params.set('country', country);
     if (weightClass && weightClass !== 'All classes') params.set('weightClass', weightClass);
@@ -234,6 +338,12 @@ export default function Home() {
       division: ageDivision,
       equipment,
       liftCategory,
+      isManualEntry,
+      manualSquat: manualSquat ? parseFloat(manualSquat) : undefined,
+      manualBench: manualBench ? parseFloat(manualBench) : undefined,
+      manualDeadlift: manualDeadlift ? parseFloat(manualDeadlift) : undefined,
+      manualBodyweight: manualBodyweight ? parseFloat(manualBodyweight) : undefined,
+      manualGender: manualGender || undefined,
     });
 
     // scroll to results
@@ -246,21 +356,150 @@ export default function Home() {
     <div className="min-h-dvh bg-base-100 text-base-content">
       {/* search section - full viewport height */}
       <main className="min-h-dvh mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-30">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 min-h-28 sm:min-h-0">
-          <h1 className="text-4xl font-bold sm:text-5xl whitespace-nowrap">
-            Let's spot
-          </h1>
-          <div className="form-control flex-1 h-12 mt-2">
-            <LifterDropWrapper
-              setFederation={setFederation}
-              setCountry={setCountry}
-              setWeightClass={setWeightClass}
-              setAgeDivision={setAgeDivision}
-              setTested={setTested}
-              setEquipment={setEquipment}
-              setLifterName={setLifterName}
-            />
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 min-h-28 sm:min-h-0">
+            <h1 className="text-4xl font-bold sm:text-5xl whitespace-nowrap">
+              Let's spot
+            </h1>
+            {!isManualEntry && (
+              <div className="form-control flex-1 h-12 mt-2">
+                <LifterDropWrapper
+                  setFederation={setFederation}
+                  setCountry={setCountry}
+                  setWeightClass={setWeightClass}
+                  setAgeDivision={setAgeDivision}
+                  setTested={setTested}
+                  setEquipment={setEquipment}
+                  setLifterName={setLifterName}
+                />
+              </div>
+            )}
           </div>
+
+          <div className="form-control">
+            <label className="label cursor-pointer justify-start gap-3">
+              <input
+                type="checkbox"
+                className="checkbox"
+                checked={isManualEntry}
+                onChange={(e) => {
+                  setIsManualEntry(e.target.checked);
+                  if (e.target.checked) {
+                    setLifterName("");
+                  } else {
+                    setManualSquat("");
+                    setManualBench("");
+                    setManualDeadlift("");
+                    setManualBodyweight("");
+                    setManualGender(null);
+                  }
+                }}
+              />
+              <span className="label-text">
+                I haven't competed yet - enter my lifts manually
+              </span>
+            </label>
+          </div>
+
+          {isManualEntry && (
+            <div className="space-y-4">
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text uppercase text-xs font-semibold tracking-wider">
+                    Gender
+                  </span>
+                </label>
+                <div className="flex gap-4">
+                  <label className="label cursor-pointer justify-start gap-2">
+                    <input
+                      type="radio"
+                      name="gender"
+                      className="radio"
+                      checked={manualGender === "male"}
+                      onChange={() => setManualGender("male")}
+                    />
+                    <span className="label-text">Male</span>
+                  </label>
+                  <label className="label cursor-pointer justify-start gap-2">
+                    <input
+                      type="radio"
+                      name="gender"
+                      className="radio"
+                      checked={manualGender === "female"}
+                      onChange={() => setManualGender("female")}
+                    />
+                    <span className="label-text">Female</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text uppercase text-xs font-semibold tracking-wider">
+                    Squat (kg)
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  placeholder="0"
+                  className="input input-bordered w-full"
+                  value={manualSquat}
+                  onChange={(e) => setManualSquat(e.target.value)}
+                />
+              </div>
+
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text uppercase text-xs font-semibold tracking-wider">
+                    Bench (kg)
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  placeholder="0"
+                  className="input input-bordered w-full"
+                  value={manualBench}
+                  onChange={(e) => setManualBench(e.target.value)}
+                />
+              </div>
+
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text uppercase text-xs font-semibold tracking-wider">
+                    Deadlift (kg)
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  placeholder="0"
+                  className="input input-bordered w-full"
+                  value={manualDeadlift}
+                  onChange={(e) => setManualDeadlift(e.target.value)}
+                />
+              </div>
+
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text uppercase text-xs font-semibold tracking-wider">
+                    Bodyweight (kg)
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="0"
+                  className="input input-bordered w-full"
+                  value={manualBodyweight}
+                  onChange={(e) => setManualBodyweight(e.target.value)}
+                />
+              </div>
+            </div>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-4">
@@ -320,9 +559,14 @@ export default function Home() {
               value={weightClass}
               onChange={(e) => setWeightClass(e.target.value)}
             >
-              {weightClasses.map((klass) => (
-                <option key={klass}>{klass}</option>
-              ))}
+              {(isManualEntry && manualGender) 
+                ? (manualGender === "female" ? femaleWeightClasses : maleWeightClasses).map((klass) => (
+                    <option key={klass}>{klass}</option>
+                  ))
+                : weightClasses.map((klass) => (
+                    <option key={klass}>{klass}</option>
+                  ))
+              }
             </select>
           </div>
 
@@ -372,7 +616,11 @@ export default function Home() {
           type="button" 
           className="btn btn-primary w-full sm:w-auto"
           onClick={handleSpotMe}
-          disabled={!lifterName.trim()}
+          disabled={
+            isManualEntry 
+              ? (!manualSquat && !manualBench && !manualDeadlift) || !manualBodyweight || !manualGender
+              : !lifterName.trim()
+          }
         >
           Spot me!
         </button>
@@ -404,7 +652,10 @@ export default function Home() {
               </p>
               {athleteData && (
                 <p className="text-xs opacity-50 mt-1">
-                  {athleteData.totalMeets} competition{athleteData.totalMeets !== 1 ? 's' : ''} on record
+                  {results.isManualEntry 
+                    ? 'Manual entry - no competition history'
+                    : `${athleteData.totalMeets} competition${athleteData.totalMeets !== 1 ? 's' : ''} on record`
+                  }
                 </p>
               )}
             </div>
@@ -530,7 +781,12 @@ export default function Home() {
                             </p>
                           </div>
                         ) : (
-                          <p className="text-sm opacity-60">No current rankings available</p>
+                          <div className="text-sm opacity-60">
+                            <p>No current rankings available</p>
+                            {rankingData.message && (
+                              <p className="text-xs opacity-50 mt-2">{rankingData.message}</p>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -562,7 +818,12 @@ export default function Home() {
                             </p>
                           </div>
                         ) : (
-                          <p className="text-sm opacity-60">No all-time rankings available</p>
+                          <div className="text-sm opacity-60">
+                            <p>No all-time rankings available</p>
+                            {rankingData.message && (
+                              <p className="text-xs opacity-50 mt-2">{rankingData.message}</p>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -612,15 +873,15 @@ export default function Home() {
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="card bg-base-100 shadow-lg">
                     <div className="card-body">
-                      <h3 className="card-title">Rankings</h3>
-                      <p className="text-sm opacity-60">Position in division/weight class coming soon</p>
+                      <h3 className="card-title">test</h3>
+                      <p className="text-sm opacity-60">test</p>
                     </div>
                   </div>
 
                   <div className="card bg-base-100 shadow-lg">
                     <div className="card-body">
-                      <h3 className="card-title">Comparison</h3>
-                      <p className="text-sm opacity-60">Compare with other lifters coming soon</p>
+                      <h3 className="card-title">test</h3>
+                      <p className="text-sm opacity-60">test</p>
                     </div>
                   </div>
                 </div>
@@ -651,5 +912,17 @@ export default function Home() {
         )}
       </section>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-dvh bg-base-100 flex items-center justify-center">
+        <span className="loading loading-spinner loading-lg"></span>
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }
