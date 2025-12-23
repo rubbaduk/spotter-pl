@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import LifterDropWrapper from "@/app/components/LifterDropWrapper";
+import ProgressionChart from "@/app/components/ProgressionChart";
 
 import {
   federationGroups,
@@ -110,6 +111,14 @@ type AthleteBests = {
     total: string;
     dots: string;
   }>;
+  allCompetitions?: Array<{
+    date: string;
+    meetName: string;
+    squat: number;
+    bench: number;
+    deadlift: number;
+    total: number;
+  }>;
 };
 
 type AthleteRanking = {
@@ -122,7 +131,29 @@ type AthleteRanking = {
   athleteBest: number;
   isPoints?: boolean;
   message?: string;
+  currentMilestoneInfo?: {
+    targetRank: number;
+    targetValue: number;
+    difference: number;
+    unit: string;
+  };
+  allTimeMilestoneInfo?: {
+    targetRank: number;
+    targetValue: number;
+    difference: number;
+    unit: string;
+  };
 };
+
+// Helper function to get ordinal suffix
+function getOrdinalSuffix(n: number): string {
+  const j = n % 10;
+  const k = n % 100;
+  if (j === 1 && k !== 11) return 'st';
+  if (j === 2 && k !== 12) return 'nd';
+  if (j === 3 && k !== 13) return 'rd';
+  return 'th';
+}
 
 function HomeContent() {
   const router = useRouter();
@@ -775,9 +806,7 @@ function HomeContent() {
                             <p className="text-3xl font-bold">
                               {rankingData.currentRank}
                               <span className="text-lg font-normal opacity-60">
-                                {rankingData.currentRank === 1 ? 'st' : 
-                                 rankingData.currentRank === 2 ? 'nd' : 
-                                 rankingData.currentRank === 3 ? 'rd' : 'th'}
+                                {getOrdinalSuffix(rankingData.currentRank)}
                               </span>
                             </p>
                             <p className="text-sm opacity-70">
@@ -791,6 +820,17 @@ function HomeContent() {
                             <p className="text-xs opacity-50">
                               Best {results.liftCategory}: {rankingData.athleteBest.toFixed(2)}{rankingData.isPoints ? ' pts' : ' kg'}
                             </p>
+                            {/* current milestone information */}
+                            {rankingData.currentMilestoneInfo && rankingData.currentMilestoneInfo.difference > 0 && (
+                              <div className="mt-4 p-3 bg-primary/10 rounded-lg">
+                                <p className="text-sm font-semibold text-primary">
+                                  You're {rankingData.currentMilestoneInfo.difference.toFixed(1)} {rankingData.currentMilestoneInfo.unit} from Top {rankingData.currentMilestoneInfo.targetRank}
+                                </p>
+                                <p className="text-xs opacity-60 mt-1">
+                                  Need: {rankingData.currentMilestoneInfo.targetValue.toFixed(2)} {rankingData.currentMilestoneInfo.unit}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="text-sm opacity-60">
@@ -812,9 +852,7 @@ function HomeContent() {
                             <p className="text-3xl font-bold">
                               {rankingData.allTimeRank}
                               <span className="text-lg font-normal opacity-60">
-                                {rankingData.allTimeRank === 1 ? 'st' : 
-                                 rankingData.allTimeRank === 2 ? 'nd' : 
-                                 rankingData.allTimeRank === 3 ? 'rd' : 'th'}
+                                {getOrdinalSuffix(rankingData.allTimeRank)}
                               </span>
                             </p>
                             <p className="text-sm opacity-70">
@@ -828,6 +866,17 @@ function HomeContent() {
                             <p className="text-xs opacity-50">
                               Best {results.liftCategory}: {rankingData.athleteBest.toFixed(2)}{rankingData.isPoints ? ' pts' : ' kg'}
                             </p>
+                            {/* all-time milestone information */}
+                            {rankingData.allTimeMilestoneInfo && rankingData.allTimeMilestoneInfo.difference > 0 && (
+                              <div className="mt-4 p-3 bg-primary/10 rounded-lg">
+                                <p className="text-sm font-semibold text-primary">
+                                  You're {rankingData.allTimeMilestoneInfo.difference.toFixed(1)} {rankingData.allTimeMilestoneInfo.unit} from Top {rankingData.allTimeMilestoneInfo.targetRank}
+                                </p>
+                                <p className="text-xs opacity-60 mt-1">
+                                  Need: {rankingData.allTimeMilestoneInfo.targetValue.toFixed(2)} {rankingData.allTimeMilestoneInfo.unit}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="text-sm opacity-60">
@@ -840,6 +889,14 @@ function HomeContent() {
                       </div>
                     </div>
                   </div>
+                )}
+
+                {/* progression chart */}
+                {athleteData?.allCompetitions && athleteData.allCompetitions.length > 0 && (
+                  <ProgressionChart 
+                    data={athleteData.allCompetitions} 
+                    athleteName={athleteData.name}
+                  />
                 )}
 
                 {/* recent competitions */}

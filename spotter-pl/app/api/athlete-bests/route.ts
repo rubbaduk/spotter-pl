@@ -136,6 +136,31 @@ export async function GET(req: Request) {
         dots: row.dots,
     }));
 
+    // get all competitions for progression chart
+    const allCompsQuery = `
+        SELECT 
+            date,
+            meetname,
+            best3squatkg,
+            best3benchkg,
+            best3deadliftkg,
+            totalkg
+        FROM opl.opl_raw
+        WHERE name = $1
+        AND date IS NOT NULL
+        ORDER BY date ASC
+    `;
+    const allCompsResult = await pool.query(allCompsQuery, [name]);
+    
+    const allCompetitions = allCompsResult.rows.map(row => ({
+        date: row.date,
+        meetName: row.meetname,
+        squat: parseFloat(row.best3squatkg) || 0,
+        bench: parseFloat(row.best3benchkg) || 0,
+        deadlift: parseFloat(row.best3deadliftkg) || 0,
+        total: parseFloat(row.totalkg) || 0,
+    }));
+
     // get total meets count
     const totalMeetsQuery = `
         SELECT COUNT(*) as total
@@ -155,5 +180,6 @@ export async function GET(req: Request) {
         bestGoodlift,
         bestDots,
         recentCompetitions: recentComps,
+        allCompetitions,
     });
 }

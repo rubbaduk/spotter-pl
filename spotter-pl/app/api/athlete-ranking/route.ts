@@ -161,6 +161,83 @@ export async function GET(req: Request) {
     
     const allTimeRank = allTimeRankingResult.rows[0]?.rank || null;
     
+    // calculate milestones
+    const milestones = [100, 50, 20, 10, 5, 1];
+    
+    // calculate all-time milestone
+    let allTimeMilestoneInfo = null;
+    if (allTimeRank && allTimeRank > 1) {
+        // find the next milestone the athlete is aiming for
+        const targetMilestone = milestones.find(m => allTimeRank > m) || 1;
+        
+        // get the lift value at that milestone position
+        const milestoneQuery = `
+            WITH ranked_lifters AS (
+                SELECT 
+                    name,
+                    MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
+                    ROW_NUMBER() OVER (ORDER BY MAX(CAST(${rankColumn} AS FLOAT)) DESC) as rank
+                FROM opl.opl_raw
+                ${baseWhere}
+                AND CAST(${rankColumn} AS FLOAT) > 0
+                GROUP BY name
+            )
+            SELECT best_value
+            FROM ranked_lifters
+            WHERE rank = $${baseParams.length + 1}
+        `;
+        const milestoneResult = await pool.query(milestoneQuery, [...baseParams, targetMilestone]);
+        
+        if (milestoneResult.rows.length > 0) {
+            const milestoneValue = parseFloat(milestoneResult.rows[0].best_value) || 0;
+            const difference = milestoneValue - athleteBest;
+            
+            allTimeMilestoneInfo = {
+                targetRank: targetMilestone,
+                targetValue: milestoneValue,
+                difference: difference > 0 ? difference : 0,
+                unit: isPoints ? 'points' : 'kg'
+            };
+        }
+    }
+    
+    // calculate current-year milestone
+    let currentMilestoneInfo = null;
+    if (currentRank && currentRank > 1) {
+        // find the next milestone the athlete is aiming for
+        const targetMilestone = milestones.find(m => currentRank > m) || 1;
+        
+        // get the lift value at that milestone position for current year
+        const currentMilestoneQuery = `
+            WITH ranked_lifters AS (
+                SELECT 
+                    name,
+                    MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
+                    ROW_NUMBER() OVER (ORDER BY MAX(CAST(${rankColumn} AS FLOAT)) DESC) as rank
+                FROM opl.opl_raw
+                ${currentWhere}
+                AND CAST(${rankColumn} AS FLOAT) > 0
+                GROUP BY name
+            )
+            SELECT best_value
+            FROM ranked_lifters
+            WHERE rank = $${currentParams.length + 1}
+        `;
+        const currentMilestoneResult = await pool.query(currentMilestoneQuery, [...currentParams, targetMilestone]);
+        
+        if (currentMilestoneResult.rows.length > 0) {
+            const milestoneValue = parseFloat(currentMilestoneResult.rows[0].best_value) || 0;
+            const difference = milestoneValue - athleteBest;
+            
+            currentMilestoneInfo = {
+                targetRank: targetMilestone,
+                targetValue: milestoneValue,
+                difference: difference > 0 ? difference : 0,
+                unit: isPoints ? 'points' : 'kg'
+            };
+        }
+    }
+    
     return NextResponse.json({
         name,
         currentRank: currentRankingResult.rows[0]?.rank || null,
@@ -170,5 +247,7 @@ export async function GET(req: Request) {
         liftCategory,
         athleteBest,
         isPoints,
+        currentMilestoneInfo,
+        allTimeMilestoneInfo,
     });
 }
