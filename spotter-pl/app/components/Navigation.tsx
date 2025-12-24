@@ -12,7 +12,7 @@ export default function Navigation() {
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-8">
             <Link href="/" className="text-xl font-bold">
-              Spotter
+              SpotterPL
             </Link>
             <div className="tabs tabs-boxed">
               <Link 
@@ -29,6 +29,12 @@ export default function Navigation() {
               </Link>
             </div>
           </div>
+          <Link 
+            href="/faq" 
+            className={`btn btn-ghost btn-sm ${pathname === '/faq' ? 'btn-active' : ''}`}
+          >
+            FAQ
+          </Link>
         </div>
       </div>
     </div>
