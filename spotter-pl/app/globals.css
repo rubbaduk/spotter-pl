@@ -48,6 +48,25 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+}
+
+/* remove white focus border from inputs */
+input:focus, 
+textarea:focus, 
+select:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* specifically for DaisyUI components */
+.input:focus, 
+.select:focus, 
+.textarea:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+@theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
