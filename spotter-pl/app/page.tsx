@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import LifterDropWrapper from "@/app/components/LifterDropWrapper";
 import ProgressionChart from "@/app/components/ProgressionChart";
 import Navigation from "@/app/components/Navigation";
+import RankingComparison from "@/app/components/RankingComparison";
 
 import {
   federationGroups,
@@ -891,6 +892,31 @@ function HomeContent() {
                       </div>
                     </div>
                   </div>
+                )}
+
+                {/* nearby athletes ranking comparison */}
+                {rankingData && (rankingData.currentRank || rankingData.allTimeRank) && (
+                  <RankingComparison
+                    athleteName={results.isManualEntry ? undefined : athleteData?.name}
+                    athleteValue={rankingData.athleteBest}
+                    currentRank={rankingData.currentRank}
+                    allTimeRank={rankingData.allTimeRank}
+                    isManualEntry={results.isManualEntry}
+                    manualData={results.isManualEntry ? {
+                      squat: results.manualSquat?.toString() || '',
+                      bench: results.manualBench?.toString() || '',
+                      deadlift: results.manualDeadlift?.toString() || '',
+                      bodyweight: results.manualBodyweight?.toString() || '',
+                      gender: results.manualGender || 'male'
+                    } : undefined}
+                    filters={{
+                      federation: results.federation,
+                      equipment: results.equipment,
+                      weightClass: results.weightClass,
+                      division: results.division,
+                      liftCategory: results.liftCategory
+                    }}
+                  />
                 )}
 
                 {/* progression chart */}

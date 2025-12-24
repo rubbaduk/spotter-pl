@@ -73,17 +73,24 @@ export async function GET(req: Request) {
                 federation
             FROM opl.opl_raw
             WHERE name = $1
-            AND CAST(best3squatkg AS FLOAT) > 0
         )
         SELECT 
             (SELECT jsonb_build_object('value', squat, 'date', date, 'meet', meetname, 'federation', federation)
-             FROM athlete_data ORDER BY squat DESC, date DESC LIMIT 1) as best_squat,
+             FROM athlete_data 
+             WHERE squat > 0
+             ORDER BY squat DESC, date DESC LIMIT 1) as best_squat,
             (SELECT jsonb_build_object('value', bench, 'date', date, 'meet', meetname, 'federation', federation)
-             FROM athlete_data ORDER BY bench DESC, date DESC LIMIT 1) as best_bench,
+             FROM athlete_data 
+             WHERE bench > 0
+             ORDER BY bench DESC, date DESC LIMIT 1) as best_bench,
             (SELECT jsonb_build_object('value', deadlift, 'date', date, 'meet', meetname, 'federation', federation)
-             FROM athlete_data ORDER BY deadlift DESC, date DESC LIMIT 1) as best_deadlift,
+             FROM athlete_data 
+             WHERE deadlift > 0
+             ORDER BY deadlift DESC, date DESC LIMIT 1) as best_deadlift,
             (SELECT jsonb_build_object('value', total, 'date', date, 'meet', meetname, 'federation', federation)
-             FROM athlete_data ORDER BY total DESC, date DESC LIMIT 1) as best_total,
+             FROM athlete_data 
+             WHERE total > 0
+             ORDER BY total DESC, date DESC LIMIT 1) as best_total,
             MAX(goodlift) as best_goodlift,
             MAX(dots) as best_dots
         FROM athlete_data

@@ -165,15 +165,47 @@ function CompareContent() {
   useEffect(() => {
     const athlete1 = searchParams.get('athlete1');
     const athlete2 = searchParams.get('athlete2');
+    
+    // check for manual entry data for athlete 1
+    const manual1Squat = searchParams.get('manual1_squat');
+    const manual1Bench = searchParams.get('manual1_bench');
+    const manual1Deadlift = searchParams.get('manual1_deadlift');
+    const manual1Bodyweight = searchParams.get('manual1_bodyweight');
+    const manual1Gender = searchParams.get('manual1_gender') as 'male' | 'female';
 
     if (athlete1) setAthlete1Name(athlete1);
     if (athlete2) setAthlete2Name(athlete2);
 
-    if (athlete1 && athlete2) {
+    // handle manual entry for athlete 1
+    if (manual1Squat && manual1Bench && manual1Deadlift && manual1Bodyweight && manual1Gender) {
+      setIsManualEntry1(true);
+      setManual1({
+        squat: manual1Squat,
+        bench: manual1Bench,
+        deadlift: manual1Deadlift,
+        bodyweight: manual1Bodyweight,
+        gender: manual1Gender
+      });
+    }
+
+    // trigger comparison if we have both athletes (either searched or manual)
+    if ((athlete1 || manual1Squat) && athlete2) {
       setComparison({
-        athlete1Name: athlete1,
+        athlete1Name: athlete1 || '',
         athlete2Name: athlete2,
       });
+      
+      setManualComparison({
+        athlete1Manual: manual1Squat ? {
+          squat: manual1Squat,
+          bench: manual1Bench || '',
+          deadlift: manual1Deadlift || '',
+          bodyweight: manual1Bodyweight || '',
+          gender: manual1Gender || 'male'
+        } : null,
+        athlete2Manual: null,
+      });
+      
       setTimeout(() => {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);

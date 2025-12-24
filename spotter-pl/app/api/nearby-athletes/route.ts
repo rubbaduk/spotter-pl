@@ -1,0 +1,135 @@
+import pool from '@/lib/db';
+import { NextResponse } from 'next/server';
+
+export async function GET(req: Request) {
+    const { searchParams } = new URL(req.url);
+    const name = searchParams.get('name');
+    const athleteRank = searchParams.get('rank');
+    const rankType = searchParams.get('rankType') || 'current'; // 'current' or 'all time'
+    const federation = searchParams.get('federation');
+    const equipment = searchParams.get('equipment');
+    const weightClass = searchParams.get('weightClass');
+    const division = searchParams.get('division');
+    const liftCategory = searchParams.get('lift') || 'Total';
+    const range = parseInt(searchParams.get('range') || '5', 10); // how many athletes above/below to show
+
+    if (!athleteRank) {
+        return NextResponse.json({ error: 'Rank is required' }, { status: 400 });
+    }
+
+    const rank = parseInt(athleteRank, 10);
+
+    // determine which column to use for ranking
+    let rankColumn = 'totalkg';
+    let isPoints = false;
+    
+    if (liftCategory === 'Squat') {
+        rankColumn = 'best3squatkg';
+    } else if (liftCategory === 'Bench') {
+        rankColumn = 'best3benchkg';
+    } else if (liftCategory === 'Deadlift') {
+        rankColumn = 'best3deadliftkg';
+    } else if (liftCategory === 'GL Points') {
+        rankColumn = 'goodlift';
+        isPoints = true;
+    } else if (liftCategory === 'Dots') {
+        rankColumn = 'dots';
+        isPoints = true;
+    } else if (liftCategory === 'Glossbrenner') {
+        rankColumn = 'glossbrenner';
+        isPoints = true;
+    } else if (liftCategory === 'McCulloch') {
+        rankColumn = 'mcculloch';
+        isPoints = true;
+    } else if (liftCategory === 'Wilks') {
+        rankColumn = 'wilks';
+        isPoints = true;
+    }
+
+    // build base filter conditions
+    const baseConditions: string[] = [];
+    const baseParams: (string | null)[] = [];
+
+    if (federation && federation !== 'all') {
+        baseConditions.push(`LOWER(federation) = $${baseParams.length + 1}`);
+        baseParams.push(federation.toLowerCase());
+    }
+
+    if (equipment && equipment !== 'all') {
+        baseConditions.push(`LOWER(equipment) = $${baseParams.length + 1}`);
+        baseParams.push(equipment.toLowerCase());
+    }
+
+    if (weightClass && weightClass !== 'All classes') {
+        const wcNum = weightClass.replace(' kg', '').replace('+', '');
+        baseConditions.push(`weightclasskg = $${baseParams.length + 1}`);
+        baseParams.push(wcNum);
+    }
+
+    if (division && division !== 'All Divisions') {
+        if (division === 'Junior') {
+            baseConditions.push(`(division = $${baseParams.length + 1} OR division = $${baseParams.length + 2})`);
+            baseParams.push('Junior', 'Juniors');
+        } else if (division === 'Sub-Junior') {
+            baseConditions.push(`(division = $${baseParams.length + 1} OR division = $${baseParams.length + 2})`);
+            baseParams.push('Sub-Junior', 'Sub-Juniors');
+        } else {
+            baseConditions.push(`division = $${baseParams.length + 1}`);
+            baseParams.push(division);
+        }
+    }
+
+    // add year filter for current rankings
+    if (rankType === 'current') {
+        const currentYear = new Date().getFullYear().toString();
+        baseConditions.push(`date LIKE $${baseParams.length + 1} || '%'`);
+        baseParams.push(currentYear);
+    }
+
+    const baseWhere = baseConditions.length > 0 
+        ? `WHERE ${baseConditions.join(' AND ')}`
+        : '';
+
+    // get nearby athletes
+    const nearbyQuery = `
+        WITH ranked_lifters AS (
+            SELECT 
+                name,
+                MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
+                ROW_NUMBER() OVER (ORDER BY MAX(CAST(${rankColumn} AS FLOAT)) DESC) as rank
+            FROM opl.opl_raw
+            ${baseWhere}
+            AND CAST(${rankColumn} AS FLOAT) > 0
+            GROUP BY name
+        )
+        SELECT name, best_value, rank
+        FROM ranked_lifters
+        WHERE rank >= $${baseParams.length + 1} AND rank <= $${baseParams.length + 2}
+        ORDER BY rank ASC
+    `;
+
+    const startRank = Math.max(1, rank - range);
+    const endRank = rank + range;
+    const nearbyParams = [...baseParams, startRank, endRank];
+
+    try {
+        const result = await pool.query(nearbyQuery, nearbyParams);
+        
+        const athletes = result.rows.map(row => ({
+            name: row.name,
+            rank: parseInt(row.rank, 10),
+            value: parseFloat(row.best_value),
+            isCurrentAthlete: name ? row.name === name : false
+        }));
+
+        return NextResponse.json({
+            athletes,
+            isPoints,
+            liftCategory,
+            unit: isPoints ? 'pts' : 'kg'
+        });
+    } catch (error) {
+        console.error('Error fetching nearby athletes:', error);
+        return NextResponse.json({ error: 'Failed to fetch nearby athletes' }, { status: 500 });
+    }
+}
