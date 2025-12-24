@@ -54,6 +54,9 @@ export default function FaqPage() {
                   <h3 className="card-title text-lg mb-2">Who runs this site?</h3>
                   <p className="opacity-80">
                     Currently, just a solo powerlifter/developer.
+
+                    <br></br>
+                    Note: This project is separate from the OpenPowerlifting team. We just use their data :)
                     <br></br>
                     However if you'd like to get involved, feel free to submit an
                     <a className="font-bold" href="https://github.com/rubbaduk/spotter-pl"
@@ -68,38 +71,30 @@ export default function FaqPage() {
                   <p className="opacity-80">
                     All athlete data is derived straight from OpenPowerlifting.
                     <br></br>
-                    For corrections and other inquiries related to athlete data, please refer to
+                    For corrections and other inquiries related to athlete/competition data, please refer to
                     <a className="font-bold" href="https://www.openpowerlifting.org/faq"
                     target="_blank"
                     rel="noopener noreferrer"> their FAQ</a>
                   </p>
                 </div>
               </div>
-            </div>
-          </section>
-
-          {/* Contact Section */}
-          <section>
-            <h2 className="text-3xl font-bold mb-6">Get in Touch</h2>
-            <div className="card bg-base-200 shadow-lg">
-              <div className="card-body">
-                <p className="text-lg opacity-80 mb-4">
-                  Have questions, feedback, or found an error? We'd love to hear from you!
-                </p>
-                <div className="space-y-2">
-                  <p className="opacity-80">
-                    <strong>Email:</strong> [your-contact@email.com]
-                  </p>
-                  <p className="opacity-80">
-                    <strong>Twitter:</strong> [@your-twitter-handle]
-                  </p>
-                  <p className="opacity-80">
-                    <strong>GitHub:</strong> [github.com/your-repo]
-                  </p>
+              <div className="card bg-[#1C1C1C] shadow-lg">
+                <div className="card-body">
+                  <h3 className="card-title text-lg mb-2 italic">____ feature isn't working... You should implement ____, etc.</h3>
+                  <div className="opacity-80 space-y-3">
+                    <p>For inquiries or suggestions, please reach out to:</p>
+                    <a
+                      href="mailto:spotterpowerlifting@gmail.com"
+                      className="font-bold tracking-wide text-primary-content rounded-xl py-2"
+                    >
+                      spotterpowerlifting@gmail.com
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
           </section>
+
         </div>
       </main>
     </div>

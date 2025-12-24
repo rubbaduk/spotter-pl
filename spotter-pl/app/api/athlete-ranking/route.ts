@@ -116,49 +116,32 @@ export async function GET(req: Request) {
         ? `WHERE ${currentConditions.join(' AND ')}`
         : '';
 
-    // count all lifters in current category
-    const currentCountQuery = `
-        SELECT COUNT(DISTINCT name) as total
-        FROM opl.opl_raw
-        ${currentWhere}
-        AND CAST(${rankColumn} AS FLOAT) > 0
-    `;
-    const currentCountResult = await pool.query(currentCountQuery, currentParams);
-    const totalCurrent = parseInt(currentCountResult.rows[0]?.total || '0', 10);
-
-    // athletes position in current rankings (count athletes with better values)
+    // combine count and rank in each query
     const currentRankingQuery = `
-        SELECT COUNT(DISTINCT name) + 1 as rank
+        SELECT 
+            COUNT(DISTINCT CASE WHEN CAST(${rankColumn} AS FLOAT) > 0 THEN name END) as total,
+            COUNT(DISTINCT CASE WHEN CAST(${rankColumn} AS FLOAT) > $${currentParams.length + 1} THEN name END) + 1 as rank
         FROM opl.opl_raw
         ${currentWhere}
-        AND CAST(${rankColumn} AS FLOAT) > $${currentParams.length + 1}
     `;
     const currentRankingParams = [...currentParams, athleteBest];
     const currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
     
+    const totalCurrent = parseInt(currentRankingResult.rows[0]?.total || '0', 10);
     const currentRank = currentRankingResult.rows[0]?.rank || null;
 
-    // all time rankings
-    // count all lifters in all-time category 
-    const allTimeCountQuery = `
-        SELECT COUNT(DISTINCT name) as total
-        FROM opl.opl_raw
-        ${baseWhere}
-        AND CAST(${rankColumn} AS FLOAT) > 0
-    `;
-    const allTimeCountResult = await pool.query(allTimeCountQuery, baseParams);
-    const totalAllTime = parseInt(allTimeCountResult.rows[0]?.total || '0', 10);
-
-    // get all-time rankings
+    // all time rankings - combine count and rank
     const allTimeRankingQuery = `
-        SELECT COUNT(DISTINCT name) + 1 as rank
+        SELECT 
+            COUNT(DISTINCT CASE WHEN CAST(${rankColumn} AS FLOAT) > 0 THEN name END) as total,
+            COUNT(DISTINCT CASE WHEN CAST(${rankColumn} AS FLOAT) > $${baseParams.length + 1} THEN name END) + 1 as rank
         FROM opl.opl_raw
         ${baseWhere}
-        AND CAST(${rankColumn} AS FLOAT) > $${baseParams.length + 1}
     `;
     const allTimeRankingParams = [...baseParams, athleteBest];
     const allTimeRankingResult = await pool.query(allTimeRankingQuery, allTimeRankingParams);
     
+    const totalAllTime = parseInt(allTimeRankingResult.rows[0]?.total || '0', 10);
     const allTimeRank = allTimeRankingResult.rows[0]?.rank || null;
     
     // calculate milestones
