@@ -95,23 +95,22 @@ export async function GET(req: Request) {
         WITH ranked_lifters AS (
             SELECT 
                 name,
-                best_value,
-                ROW_NUMBER() OVER (ORDER BY best_value DESC) as rank
+                MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
+                ROW_NUMBER() OVER (ORDER BY MAX(CAST(${rankColumn} AS FLOAT)) DESC) as rank
             FROM (
-                SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                SELECT name, CAST(${rankColumn} AS FLOAT) as ${rankColumn}
                 FROM opl.opl_raw
                 ${baseWhere}
                 ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
-                GROUP BY name
                 
-                UNION
+                UNION ALL
                 
-                SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                SELECT name, CAST(${rankColumn} AS FLOAT) as ${rankColumn}
                 FROM opl.ipf_raw
                 ${baseWhere}
                 ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
-                GROUP BY name
             ) combined
+            GROUP BY name
         )
         SELECT name, best_value, rank
         FROM ranked_lifters
@@ -130,34 +129,50 @@ export async function GET(req: Request) {
         let athleteAllTimeBest: number | null = null;
         if (name) {
             const allTimeBestQuery = `
-                SELECT MAX(best_value) as best_value
+                SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
                 FROM (
-                    SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    SELECT CAST(${rankColumn} AS FLOAT) as ${rankColumn}
                     FROM opl.opl_raw
-                    WHERE name = $1
-                    AND CAST(${rankColumn} AS FLOAT) > 0
+                    WHERE name = $1 AND CAST(${rankColumn} AS FLOAT) > 0
                     
-                    UNION
+                    UNION ALL
                     
-                    SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    SELECT CAST(${rankColumn} AS FLOAT) as ${rankColumn}
                     FROM opl.ipf_raw
-                    WHERE name = $1
-                    AND CAST(${rankColumn} AS FLOAT) > 0
+                    WHERE name = $1 AND CAST(${rankColumn} AS FLOAT) > 0
                 ) combined
             `;
             const allTimeBestResult = await pool.query(allTimeBestQuery, [name]);
             athleteAllTimeBest = parseFloat(allTimeBestResult.rows[0]?.best_value) || null;
         }
         
-        const athletes = result.rows.map(row => ({
+        let athletes = result.rows.map(row => ({
             name: row.name,
             rank: parseInt(row.rank, 10),
-            // use all-time best for the searched athlete, filtered best for others
-            value: (name && row.name === name && athleteAllTimeBest !== null) 
-                ? athleteAllTimeBest 
-                : parseFloat(row.best_value),
+            value: parseFloat(row.best_value),
             isCurrentAthlete: name ? row.name === name : false
         }));
+
+        // if searched athlete exists, update their value to all-time best and re-sort
+        if (name && athleteAllTimeBest !== null) {
+            const searchedAthleteIndex = athletes.findIndex(a => a.isCurrentAthlete);
+            
+            if (searchedAthleteIndex >= 0) {
+                // update value to all-time best
+                athletes[searchedAthleteIndex].value = athleteAllTimeBest;
+                
+                // re-sort by value descending to get correct positioning
+                athletes.sort((a, b) => b.value - a.value);
+                
+                // find the searched athlete's new position in the sorted list
+                const searchedAthletePosition = athletes.findIndex(a => a.isCurrentAthlete);
+                
+                // keep only athletes around the searched athlete (by position, not rank)
+                const startPosition = Math.max(0, searchedAthletePosition - range);
+                const endPosition = Math.min(athletes.length - 1, searchedAthletePosition + range);
+                athletes = athletes.slice(startPosition, endPosition + 1);
+            }
+        }
 
         return NextResponse.json({
             athletes,
