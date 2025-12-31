@@ -82,8 +82,8 @@ export async function GET(req: Request) {
     // add year filter for current rankings
     if (rankType === 'current') {
         const currentYear = new Date().getFullYear().toString();
-        baseConditions.push(`date LIKE $${baseParams.length + 1} || '%'`);
-        baseParams.push(currentYear);
+        baseConditions.push(`date::text LIKE $${baseParams.length + 1}`);
+        baseParams.push(`${currentYear}%`);
     }
 
     const baseWhere = baseConditions.length > 0 
@@ -95,12 +95,23 @@ export async function GET(req: Request) {
         WITH ranked_lifters AS (
             SELECT 
                 name,
-                MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
-                ROW_NUMBER() OVER (ORDER BY MAX(CAST(${rankColumn} AS FLOAT)) DESC) as rank
-            FROM opl.opl_raw
-            ${baseWhere}
-            AND CAST(${rankColumn} AS FLOAT) > 0
-            GROUP BY name
+                best_value,
+                ROW_NUMBER() OVER (ORDER BY best_value DESC) as rank
+            FROM (
+                SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                FROM opl.opl_raw
+                ${baseWhere}
+                ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+                GROUP BY name
+                
+                UNION
+                
+                SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                FROM opl.ipf_raw
+                ${baseWhere}
+                ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+                GROUP BY name
+            ) combined
         )
         SELECT name, best_value, rank
         FROM ranked_lifters
@@ -115,10 +126,36 @@ export async function GET(req: Request) {
     try {
         const result = await pool.query(nearbyQuery, nearbyParams);
         
+        // searched athlete's all time best
+        let athleteAllTimeBest: number | null = null;
+        if (name) {
+            const allTimeBestQuery = `
+                SELECT MAX(best_value) as best_value
+                FROM (
+                    SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    FROM opl.opl_raw
+                    WHERE name = $1
+                    AND CAST(${rankColumn} AS FLOAT) > 0
+                    
+                    UNION
+                    
+                    SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    FROM opl.ipf_raw
+                    WHERE name = $1
+                    AND CAST(${rankColumn} AS FLOAT) > 0
+                ) combined
+            `;
+            const allTimeBestResult = await pool.query(allTimeBestQuery, [name]);
+            athleteAllTimeBest = parseFloat(allTimeBestResult.rows[0]?.best_value) || null;
+        }
+        
         const athletes = result.rows.map(row => ({
             name: row.name,
             rank: parseInt(row.rank, 10),
-            value: parseFloat(row.best_value),
+            // use all-time best for the searched athlete, filtered best for others
+            value: (name && row.name === name && athleteAllTimeBest !== null) 
+                ? athleteAllTimeBest 
+                : parseFloat(row.best_value),
             isCurrentAthlete: name ? row.name === name : false
         }));
 

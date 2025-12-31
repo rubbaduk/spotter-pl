@@ -138,8 +138,8 @@ export async function GET(req: Request) {
     const currentYearStr = currentYear.toString();
     
     const currentConditions = [...baseConditions];
-    currentConditions.push(`date LIKE $${baseParams.length + 1} || '%'`);
-    const currentParams = [...baseParams, currentYearStr];
+    currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
+    const currentParams = [...baseParams, `${currentYearStr}%`];
     
     const currentWhere = currentConditions.length > 0 
         ? `WHERE ${currentConditions.join(' AND ')}`
@@ -148,9 +148,19 @@ export async function GET(req: Request) {
     // count all lifters in current category
     const currentCountQuery = `
         SELECT COUNT(DISTINCT name) as total
-        FROM opl.opl_raw
-        ${currentWhere}
-        AND CAST(${rankColumn} AS FLOAT) > 0
+        FROM (
+            SELECT name
+            FROM opl.opl_raw
+            ${currentWhere}
+            AND CAST(${rankColumn} AS FLOAT) > 0
+            
+            UNION
+            
+            SELECT name
+            FROM opl.ipf_raw
+            ${currentWhere}
+            AND CAST(${rankColumn} AS FLOAT) > 0
+        ) combined
     `;
     const currentCountResult = await pool.query(currentCountQuery, currentParams);
     const totalCurrent = parseInt(currentCountResult.rows[0]?.total || '0', 10);
@@ -161,6 +171,14 @@ export async function GET(req: Request) {
         FROM (
             SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
             FROM opl.opl_raw
+            ${currentWhere}
+            AND CAST(${rankColumn} AS FLOAT) > 0
+            GROUP BY name
+            
+            UNION
+            
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            FROM opl.ipf_raw
             ${currentWhere}
             AND CAST(${rankColumn} AS FLOAT) > 0
             GROUP BY name
@@ -175,9 +193,19 @@ export async function GET(req: Request) {
     // all time rankings
     const allTimeCountQuery = `
         SELECT COUNT(DISTINCT name) as total
-        FROM opl.opl_raw
-        ${baseWhere}
-        AND CAST(${rankColumn} AS FLOAT) > 0
+        FROM (
+            SELECT name
+            FROM opl.opl_raw
+            ${baseWhere}
+            ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+            
+            UNION
+            
+            SELECT name
+            FROM opl.ipf_raw
+            ${baseWhere}
+            ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+        ) combined
     `;
     const allTimeCountResult = await pool.query(allTimeCountQuery, baseParams);
     const totalAllTime = parseInt(allTimeCountResult.rows[0]?.total || '0', 10);
@@ -189,7 +217,15 @@ export async function GET(req: Request) {
             SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
             FROM opl.opl_raw
             ${baseWhere}
-            AND CAST(${rankColumn} AS FLOAT) > 0
+            ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+            GROUP BY name
+            
+            UNION
+            
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            FROM opl.ipf_raw
+            ${baseWhere}
+            ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
             GROUP BY name
         ) subquery
         WHERE best_value > $${baseParams.length + 1}

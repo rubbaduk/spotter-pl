@@ -82,10 +82,20 @@ export async function GET(req: Request) {
 
     // get athlete's best lifts
     const athleteQuery = `
-        SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
-        FROM opl.opl_raw
-        WHERE name = $1
-        AND CAST(${rankColumn} AS FLOAT) > 0
+        SELECT MAX(best_value) as best_value
+        FROM (
+            SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            FROM opl.opl_raw
+            WHERE name = $1
+            AND CAST(${rankColumn} AS FLOAT) > 0
+            
+            UNION ALL
+            
+            SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            FROM opl.ipf_raw
+            WHERE name = $1
+            AND CAST(${rankColumn} AS FLOAT) > 0
+        ) combined
     `;
 
     const athleteResult = await pool.query(athleteQuery, [name]);
@@ -109,8 +119,8 @@ export async function GET(req: Request) {
     
     const currentConditions = [...baseConditions];
     // date field might be stored as "2025" or "2025-01-15", so check if it starts with current year
-    currentConditions.push(`date LIKE $${baseParams.length + 1} || '%'`);
-    const currentParams = [...baseParams, currentYearStr];
+    currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
+    const currentParams = [...baseParams, `${currentYearStr}%`];
     
     const currentWhere = currentConditions.length > 0 
         ? `WHERE ${currentConditions.join(' AND ')}`
@@ -119,10 +129,22 @@ export async function GET(req: Request) {
     // combine count and rank in each query
     const currentRankingQuery = `
         SELECT 
-            COUNT(DISTINCT CASE WHEN CAST(${rankColumn} AS FLOAT) > 0 THEN name END) as total,
-            COUNT(DISTINCT CASE WHEN CAST(${rankColumn} AS FLOAT) > $${currentParams.length + 1} THEN name END) + 1 as rank
-        FROM opl.opl_raw
-        ${currentWhere}
+            COUNT(DISTINCT CASE WHEN best_value > 0 THEN name END) as total,
+            COUNT(DISTINCT CASE WHEN best_value > $${currentParams.length + 1} THEN name END) + 1 as rank
+        FROM (
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            FROM opl.opl_raw
+            ${currentWhere}
+            GROUP BY name
+            
+            UNION ALL
+            
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            FROM opl.ipf_raw
+            ${currentWhere}
+            GROUP BY name
+        ) combined
+        WHERE best_value > 0
     `;
     const currentRankingParams = [...currentParams, athleteBest];
     const currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
@@ -133,10 +155,23 @@ export async function GET(req: Request) {
     // all time rankings - combine count and rank
     const allTimeRankingQuery = `
         SELECT 
-            COUNT(DISTINCT CASE WHEN CAST(${rankColumn} AS FLOAT) > 0 THEN name END) as total,
-            COUNT(DISTINCT CASE WHEN CAST(${rankColumn} AS FLOAT) > $${baseParams.length + 1} THEN name END) + 1 as rank
-        FROM opl.opl_raw
-        ${baseWhere}
+            COUNT(DISTINCT CASE WHEN best_value > 0 THEN name END) as total,
+            COUNT(DISTINCT CASE WHEN best_value > $${baseParams.length + 1} THEN name END) + 1 as rank
+        FROM (
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            FROM opl.opl_raw
+            ${baseWhere}
+            ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+            GROUP BY name
+            
+            UNION ALL
+            
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            FROM opl.ipf_raw
+            ${baseWhere}
+            ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+            GROUP BY name
+        ) combined
     `;
     const allTimeRankingParams = [...baseParams, athleteBest];
     const allTimeRankingResult = await pool.query(allTimeRankingQuery, allTimeRankingParams);
@@ -158,12 +193,23 @@ export async function GET(req: Request) {
             WITH ranked_lifters AS (
                 SELECT 
                     name,
-                    MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
-                    ROW_NUMBER() OVER (ORDER BY MAX(CAST(${rankColumn} AS FLOAT)) DESC) as rank
-                FROM opl.opl_raw
-                ${baseWhere}
-                AND CAST(${rankColumn} AS FLOAT) > 0
-                GROUP BY name
+                    best_value,
+                    ROW_NUMBER() OVER (ORDER BY best_value DESC) as rank
+                FROM (
+                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    FROM opl.opl_raw
+                    ${baseWhere}
+                    ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+                    GROUP BY name
+                    
+                    UNION ALL
+                    
+                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    FROM opl.ipf_raw
+                    ${baseWhere}
+                    ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+                    GROUP BY name
+                ) combined
             )
             SELECT best_value
             FROM ranked_lifters
@@ -195,12 +241,23 @@ export async function GET(req: Request) {
             WITH ranked_lifters AS (
                 SELECT 
                     name,
-                    MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
-                    ROW_NUMBER() OVER (ORDER BY MAX(CAST(${rankColumn} AS FLOAT)) DESC) as rank
-                FROM opl.opl_raw
-                ${currentWhere}
-                AND CAST(${rankColumn} AS FLOAT) > 0
-                GROUP BY name
+                    best_value,
+                    ROW_NUMBER() OVER (ORDER BY best_value DESC) as rank
+                FROM (
+                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    FROM opl.opl_raw
+                    ${currentWhere}
+                    AND CAST(${rankColumn} AS FLOAT) > 0
+                    GROUP BY name
+                    
+                    UNION ALL
+                    
+                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    FROM opl.ipf_raw
+                    ${currentWhere}
+                    AND CAST(${rankColumn} AS FLOAT) > 0
+                    GROUP BY name
+                ) combined
             )
             SELECT best_value
             FROM ranked_lifters

@@ -58,7 +58,7 @@ export async function GET(req: Request) {
 
     const whereClause = filterConditions.join(' AND ');
 
-    // get athlete's ALL-TIME best lifts
+    // get athlete's ALL-TIME best lifts 
     const bestsQuery = `
         WITH athlete_data AS (
             SELECT 
@@ -73,21 +73,36 @@ export async function GET(req: Request) {
                 federation
             FROM opl.opl_raw
             WHERE name = $1
+            
+            UNION ALL
+            
+            SELECT 
+                CAST(best3squatkg AS FLOAT) as squat,
+                CAST(best3benchkg AS FLOAT) as bench,
+                CAST(best3deadliftkg AS FLOAT) as deadlift,
+                CAST(totalkg AS FLOAT) as total,
+                CAST(goodlift AS FLOAT) as goodlift,
+                CAST(dots AS FLOAT) as dots,
+                meetname,
+                date,
+                federation
+            FROM opl.ipf_raw
+            WHERE name = $1
         )
         SELECT 
-            (SELECT jsonb_build_object('value', squat, 'date', date, 'meet', meetname, 'federation', federation)
+            (SELECT jsonb_build_object('value', squat, 'date', date::text, 'meet', meetname, 'federation', federation)
              FROM athlete_data 
              WHERE squat > 0
              ORDER BY squat DESC, date DESC LIMIT 1) as best_squat,
-            (SELECT jsonb_build_object('value', bench, 'date', date, 'meet', meetname, 'federation', federation)
+            (SELECT jsonb_build_object('value', bench, 'date', date::text, 'meet', meetname, 'federation', federation)
              FROM athlete_data 
              WHERE bench > 0
              ORDER BY bench DESC, date DESC LIMIT 1) as best_bench,
-            (SELECT jsonb_build_object('value', deadlift, 'date', date, 'meet', meetname, 'federation', federation)
+            (SELECT jsonb_build_object('value', deadlift, 'date', date::text, 'meet', meetname, 'federation', federation)
              FROM athlete_data 
              WHERE deadlift > 0
              ORDER BY deadlift DESC, date DESC LIMIT 1) as best_deadlift,
-            (SELECT jsonb_build_object('value', total, 'date', date, 'meet', meetname, 'federation', federation)
+            (SELECT jsonb_build_object('value', total, 'date', date::text, 'meet', meetname, 'federation', federation)
              FROM athlete_data 
              WHERE total > 0
              ORDER BY total DESC, date DESC LIMIT 1) as best_total,
@@ -99,10 +114,14 @@ export async function GET(req: Request) {
     const bestsResult = await pool.query(bestsQuery, [name]);
     const bests = bestsResult.rows[0];
 
-    const bestSquat = bests.best_squat && bests.best_squat.value > 0 ? bests.best_squat : null;
-    const bestBench = bests.best_bench && bests.best_bench.value > 0 ? bests.best_bench : null;
-    const bestDeadlift = bests.best_deadlift && bests.best_deadlift.value > 0 ? bests.best_deadlift : null;
-    const bestTotal = bests.best_total && bests.best_total.value > 0 ? bests.best_total : null;
+    const bestSquat = bests.best_squat && bests.best_squat.value > 0 ? 
+        { ...bests.best_squat, date: bests.best_squat.date ? new Date(bests.best_squat.date).toLocaleDateString('en-AU', { timeZone: 'Australia/Perth' }) : null } : null;
+    const bestBench = bests.best_bench && bests.best_bench.value > 0 ? 
+        { ...bests.best_bench, date: bests.best_bench.date ? new Date(bests.best_bench.date).toLocaleDateString('en-AU', { timeZone: 'Australia/Perth' }) : null } : null;
+    const bestDeadlift = bests.best_deadlift && bests.best_deadlift.value > 0 ? 
+        { ...bests.best_deadlift, date: bests.best_deadlift.date ? new Date(bests.best_deadlift.date).toLocaleDateString('en-AU', { timeZone: 'Australia/Perth' }) : null } : null;
+    const bestTotal = bests.best_total && bests.best_total.value > 0 ? 
+        { ...bests.best_total, date: bests.best_total.date ? new Date(bests.best_total.date).toLocaleDateString('en-AU', { timeZone: 'Australia/Perth' }) : null } : null;
     const bestGoodlift = bests.best_goodlift > 0 ? bests.best_goodlift : null;
     const bestDots = bests.best_dots > 0 ? bests.best_dots : null;
 
@@ -123,13 +142,32 @@ export async function GET(req: Request) {
             dots
         FROM opl.opl_raw
         WHERE name = $1
+        
+        UNION
+        
+        SELECT 
+            date,
+            meetname,
+            federation,
+            equipment,
+            weightclasskg,
+            division,
+            bodyweightkg,
+            best3squatkg,
+            best3benchkg,
+            best3deadliftkg,
+            totalkg,
+            dots
+        FROM opl.ipf_raw
+        WHERE name = $1
+        
         ORDER BY date DESC
         LIMIT 5
     `;
     const recentCompsResult = await pool.query(recentCompsQuery, [name]);
     
     const recentComps = recentCompsResult.rows.map(row => ({
-        date: row.date,
+        date: row.date ? new Date(row.date).toISOString().slice(0, 10) : null,
         meetName: row.meetname,
         federation: row.federation,
         equipment: row.equipment,
@@ -155,12 +193,26 @@ export async function GET(req: Request) {
         FROM opl.opl_raw
         WHERE name = $1
         AND date IS NOT NULL
+        
+        UNION
+        
+        SELECT 
+            date,
+            meetname,
+            best3squatkg,
+            best3benchkg,
+            best3deadliftkg,
+            totalkg
+        FROM opl.ipf_raw
+        WHERE name = $1
+        AND date IS NOT NULL
+        
         ORDER BY date ASC
     `;
     const allCompsResult = await pool.query(allCompsQuery, [name]);
     
     const allCompetitions = allCompsResult.rows.map(row => ({
-        date: row.date,
+        date: row.date ? new Date(row.date).toLocaleDateString('en-AU', { timeZone: 'Australia/Perth' }) : null,
         meetName: row.meetname,
         squat: parseFloat(row.best3squatkg) || 0,
         bench: parseFloat(row.best3benchkg) || 0,
@@ -171,8 +223,17 @@ export async function GET(req: Request) {
     // get total meets count
     const totalMeetsQuery = `
         SELECT COUNT(*) as total
-        FROM opl.opl_raw
-        WHERE name = $1
+        FROM (
+            SELECT date, meetname
+            FROM opl.opl_raw
+            WHERE name = $1
+            
+            UNION
+            
+            SELECT date, meetname
+            FROM opl.ipf_raw
+            WHERE name = $1
+        ) combined
     `;
     const totalMeetsResult = await pool.query(totalMeetsQuery, [name]);
     const totalMeets = parseInt(totalMeetsResult.rows[0]?.total || '0', 10);
