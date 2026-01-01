@@ -1,5 +1,7 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { fullyTestedFederations } from '@/data/testedFederations';
+import { getFederationsForCountry } from '@/data/federationCountryMap';
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
@@ -51,8 +53,28 @@ export async function GET(req: Request) {
     const baseParams: (string | null)[] = [];
 
     if (federation && federation !== 'all') {
-        baseConditions.push(`LOWER(federation) = $${baseParams.length + 1}`);
-        baseParams.push(federation.toLowerCase());
+        if (federation === 'fully-tested') {
+            // filter to only fully-tested federations
+            const testedFedsList = fullyTestedFederations.map(f => `'${f}'`).join(', ');
+            baseConditions.push(`LOWER(federation) IN (${testedFedsList})`);
+        } else if (federation === 'all-tested') {
+            // filter to only tested lifters (tested = 'Yes')
+            baseConditions.push(`tested = $${baseParams.length + 1}`);
+            baseParams.push('Yes');
+        } else if (federation.startsWith('all-')) {
+            // country-based filtering (e.g., 'all-usa', 'all-australia')
+            const country = federation.replace('all-', '');
+            const countryName = country.charAt(0).toUpperCase() + country.slice(1);
+            const countryFeds = getFederationsForCountry(countryName);
+            if (countryFeds.length > 0) {
+                const fedsList = countryFeds.map(f => `'${f}'`).join(', ');
+                baseConditions.push(`LOWER(federation) IN (${fedsList})`);
+            }
+        } else {
+            // specific federation
+            baseConditions.push(`LOWER(federation) = $${baseParams.length + 1}`);
+            baseParams.push(federation.toLowerCase());
+        }
     }
 
     if (equipment && equipment !== 'all') {
@@ -131,6 +153,29 @@ export async function GET(req: Request) {
     const nearbyParams = [...baseParams, startRank, endRank];
 
     try {
+        // get searched athlete's all-time best (no filters except name)
+        let athleteAllTimeBest: number | null = null;
+        if (name) {
+            const athleteBestQuery = `
+                SELECT MAX(best_value) as best_value
+                FROM (
+                    SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    FROM opl.opl_raw
+                    WHERE name = $1
+                    AND CAST(${rankColumn} AS FLOAT) > 0
+                    
+                    UNION ALL
+                    
+                    SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    FROM opl.ipf_raw
+                    WHERE name = $1
+                    AND CAST(${rankColumn} AS FLOAT) > 0
+                ) combined
+            `;
+            const athleteBestResult = await pool.query(athleteBestQuery, [name]);
+            athleteAllTimeBest = parseFloat(athleteBestResult.rows[0]?.best_value) || null;
+        }
+
         let result = await pool.query(nearbyQuery, nearbyParams);
 
         // fallback on prev year if no data for current year
@@ -145,8 +190,28 @@ export async function GET(req: Request) {
             const fallbackParams: (string | null)[] = [];
 
             if (federation && federation !== 'all') {
-                fallbackConditions.push(`LOWER(federation) = $${fallbackParams.length + 1}`);
-                fallbackParams.push(federation.toLowerCase());
+                if (federation === 'fully-tested') {
+                    // filter to only fully-tested federations
+                    const testedFedsList = fullyTestedFederations.map(f => `'${f}'`).join(', ');
+                    fallbackConditions.push(`LOWER(federation) IN (${testedFedsList})`);
+                } else if (federation === 'all-tested') {
+                    // filter to only tested lifters (tested = 'Yes')
+                    fallbackConditions.push(`tested = $${fallbackParams.length + 1}`);
+                    fallbackParams.push('Yes');
+                } else if (federation.startsWith('all-')) {
+                    // country-based filtering (e.g., 'all-usa', 'all-australia')
+                    const country = federation.replace('all-', '');
+                    const countryName = country.charAt(0).toUpperCase() + country.slice(1);
+                    const countryFeds = getFederationsForCountry(countryName);
+                    if (countryFeds.length > 0) {
+                        const fedsList = countryFeds.map(f => `'${f}'`).join(', ');
+                        fallbackConditions.push(`LOWER(federation) IN (${fedsList})`);
+                    }
+                } else {
+                    // specific federation
+                    fallbackConditions.push(`LOWER(federation) = $${fallbackParams.length + 1}`);
+                    fallbackParams.push(federation.toLowerCase());
+                }
             }
 
             if (equipment && equipment !== 'all') {
@@ -218,27 +283,6 @@ export async function GET(req: Request) {
             hasCurrentYearData = true;
         }
         
-        // searched athlete's all time best
-        let athleteAllTimeBest: number | null = null;
-        if (name) {
-            const allTimeBestQuery = `
-                SELECT MAX(CAST(${rankColumn} AS FLOAT)) as best_value
-                FROM (
-                    SELECT CAST(${rankColumn} AS FLOAT) as ${rankColumn}
-                    FROM opl.opl_raw
-                    WHERE name = $1 AND CAST(${rankColumn} AS FLOAT) > 0
-                    
-                    UNION ALL
-                    
-                    SELECT CAST(${rankColumn} AS FLOAT) as ${rankColumn}
-                    FROM opl.ipf_raw
-                    WHERE name = $1 AND CAST(${rankColumn} AS FLOAT) > 0
-                ) combined
-            `;
-            const allTimeBestResult = await pool.query(allTimeBestQuery, [name]);
-            athleteAllTimeBest = parseFloat(allTimeBestResult.rows[0]?.best_value) || null;
-        }
-        
         let athletes = result.rows.map(row => ({
             name: row.name,
             rank: parseInt(row.rank, 10),
@@ -246,16 +290,19 @@ export async function GET(req: Request) {
             isCurrentAthlete: name ? row.name === name : false
         }));
 
-        // if searched athlete exists, update their value to all-time best and re-sort
+        // update searched athlete's value to their all-time best and re-sort
         if (name && athleteAllTimeBest !== null) {
-            const searchedAthleteIndex = athletes.findIndex(a => a.isCurrentAthlete);
-            
-            if (searchedAthleteIndex >= 0) {
-                // update value to all-time best
-                athletes[searchedAthleteIndex].value = athleteAllTimeBest;
+            const athleteIndex = athletes.findIndex(a => a.isCurrentAthlete);
+            if (athleteIndex >= 0) {
+                athletes[athleteIndex].value = athleteAllTimeBest;
                 
                 // re-sort by value descending to get correct positioning
                 athletes.sort((a, b) => b.value - a.value);
+                
+                // recalculate rank numbers based on new sorted positions
+                athletes.forEach((athlete, index) => {
+                    athlete.rank = startRank + index;
+                });
                 
                 // find the searched athlete's new position in the sorted list
                 const searchedAthletePosition = athletes.findIndex(a => a.isCurrentAthlete);

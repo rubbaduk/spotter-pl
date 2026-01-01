@@ -33,6 +33,8 @@ export default function FaqPage() {
                     SpotterPL extracts ALL athletes that contain necessary information.
                     OpenPowerlifting may exclude some athletes from rankings/competition lists due to legitimate reasons, or due to data/update issues.
                     <br></br>
+                    - In some cases, regional/world competitions may be excluded from federation/country rankings.
+                    <br></br>
                     <br></br>
                     Use these rankings as a reference only. For qualification or eligibility, always defer to your federation's official platform.
                   </p>

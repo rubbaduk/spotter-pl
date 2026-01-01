@@ -1,5 +1,7 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { fullyTestedFederations } from '@/data/testedFederations';
+import { getFederationsForCountry } from '@/data/federationCountryMap';
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
@@ -48,8 +50,28 @@ export async function GET(req: Request) {
     const baseParams: (string | null)[] = [];
 
     if (federation && federation !== 'all') {
-        baseConditions.push(`LOWER(federation) = $${baseParams.length + 1}`);
-        baseParams.push(federation.toLowerCase());
+        if (federation === 'fully-tested') {
+            // filter to only fully-tested federations
+            const testedFedsList = fullyTestedFederations.map(f => `'${f}'`).join(', ');
+            baseConditions.push(`LOWER(federation) IN (${testedFedsList})`);
+        } else if (federation === 'all-tested') {
+            // filter to only tested lifters (tested = 'Yes')
+            baseConditions.push(`tested = $${baseParams.length + 1}`);
+            baseParams.push('Yes');
+        } else if (federation.startsWith('all-')) {
+            // country-based filtering (e.g., 'all-usa', 'all-australia')
+            const country = federation.replace('all-', '');
+            const countryName = country.charAt(0).toUpperCase() + country.slice(1);
+            const countryFeds = getFederationsForCountry(countryName);
+            if (countryFeds.length > 0) {
+                const fedsList = countryFeds.map(f => `'${f}'`).join(', ');
+                baseConditions.push(`LOWER(federation) IN (${fedsList})`);
+            }
+        } else {
+            // specific federation
+            baseConditions.push(`LOWER(federation) = $${baseParams.length + 1}`);
+            baseParams.push(federation.toLowerCase());
+        }
     }
 
     if (equipment && equipment !== 'all') {

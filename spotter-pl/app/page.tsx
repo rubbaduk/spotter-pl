@@ -580,23 +580,6 @@ function HomeContent() {
           <div className="form-control">
             <label className="label">
               <span className="label-text uppercase text-xs font-semibold tracking-wider">
-                Country
-              </span>
-            </label>
-            <select
-              className="select select-bordered w-full outline-none focus:outline-none focus:ring-0"
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-            >
-              {countries.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text uppercase text-xs font-semibold tracking-wider">
                 Weight class
               </span>
             </label>
@@ -966,7 +949,7 @@ function HomeContent() {
                   </div>
                 )}
 
-                {/* placeholder cards */}
+                {/* placeholder cards
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="card bg-base-100 shadow-lg">
                     <div className="card-body">
@@ -981,7 +964,7 @@ function HomeContent() {
                       <p className="text-sm opacity-60">test</p>
                     </div>
                   </div>
-                </div>
+                </div> */}
               </>
             )}
 
