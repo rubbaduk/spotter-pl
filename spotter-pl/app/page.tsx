@@ -187,6 +187,10 @@ function HomeContent() {
   const [athleteData, setAthleteData] = useState<AthleteBests | null>(null);
   const [rankingData, setRankingData] = useState<AthleteRanking | null>(null);
   const [loading, setLoading] = useState(false);
+  
+  // slow query warning state
+  const [showSlowQueryWarning, setShowSlowQueryWarning] = useState(false);
+  const [hasInteractedWithFederation, setHasInteractedWithFederation] = useState(false);
 
   // fetch athlete data when results change
   useEffect(() => {
@@ -286,6 +290,22 @@ function HomeContent() {
       setCountry(newCountry);
     }
   }, [federation]);
+
+  // check for slow query conditions and show warning
+  useEffect(() => {
+    const isBroadFederation = ['all', 'fully-tested', 'all-tested'].includes(federation);
+    
+    if (isBroadFederation && hasInteractedWithFederation) {
+      setShowSlowQueryWarning(true);
+      // auto-hide after 5 seconds
+      const timer = setTimeout(() => {
+        setShowSlowQueryWarning(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowSlowQueryWarning(false);
+    }
+  }, [federation, hasInteractedWithFederation]);
 
   // url parameters load
   useEffect(() => {
@@ -400,6 +420,8 @@ function HomeContent() {
   return (
     <div className="min-h-dvh bg-base-100 text-base-content">
       <Navigation />
+      
+            
       {/* search section - full viewport height */}
       <main className="min-h-dvh mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-30 pt-24">
         <div className="flex flex-col gap-6">
@@ -558,7 +580,12 @@ function HomeContent() {
             <select
               className="select select-bordered w-full outline-none focus:outline-none focus:ring-0"
               value={federation}
-              onChange={(e) => setFederation(e.target.value)}
+              onChange={(e) => {
+                setFederation(e.target.value);
+                if (!hasInteractedWithFederation) {
+                  setHasInteractedWithFederation(true);
+                }
+              }}
             >
               {federationTopOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -640,6 +667,13 @@ function HomeContent() {
             </select>
           </div>
         </div>
+
+        {/* Slow Query Warning */}
+        {showSlowQueryWarning && (
+          <div className="text-xs opacity-60 text-center -mb-6 -mt-5">
+            ⚠️ Broad filters selected - queries may take 10-30+ seconds 
+          </div>
+        )}
 
         <button 
           type="button" 

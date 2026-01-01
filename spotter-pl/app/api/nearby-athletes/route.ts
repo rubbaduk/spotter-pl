@@ -152,6 +152,11 @@ export async function GET(req: Request) {
     const endRank = rank + range;
     const nearbyParams = [...baseParams, startRank, endRank];
 
+    // debugging
+    console.log('Nearby Athletes Query:', nearbyQuery);
+    console.log('Query Params:', nearbyParams);
+    console.log('Filters:', { federation, equipment, weightClass, division, liftCategory, rankType });
+
     try {
         // get searched athlete's all-time best (no filters except name)
         let athleteAllTimeBest: number | null = null;
