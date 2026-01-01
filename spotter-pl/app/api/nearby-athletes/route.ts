@@ -80,13 +80,16 @@ export async function GET(req: Request) {
     }
 
     // add year filter for current rankings
+    let effectiveYear = new Date().getFullYear();
+    let hasCurrentYearData = true;
+
     if (rankType === 'current') {
-        const currentYear = new Date().getFullYear().toString();
+        let currentYearStr = effectiveYear.toString();
         baseConditions.push(`date::text LIKE $${baseParams.length + 1}`);
-        baseParams.push(`${currentYear}%`);
+        baseParams.push(`${currentYearStr}%`);
     }
 
-    const baseWhere = baseConditions.length > 0 
+    let baseWhere = baseConditions.length > 0 
         ? `WHERE ${baseConditions.join(' AND ')}`
         : '';
 
@@ -96,16 +99,21 @@ export async function GET(req: Request) {
             SELECT 
                 name,
                 MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
-                ROW_NUMBER() OVER (ORDER BY MAX(CAST(${rankColumn} AS FLOAT)) DESC) as rank
+                MAX(CAST(dots AS FLOAT)) as dots_value,
+                ROW_NUMBER() OVER (
+                    ORDER BY 
+                        MAX(CAST(${rankColumn} AS FLOAT)) DESC
+                        ${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) DESC' : ''}
+                ) as rank
             FROM (
-                SELECT name, CAST(${rankColumn} AS FLOAT) as ${rankColumn}
+                SELECT name, CAST(${rankColumn} AS FLOAT) as ${rankColumn}, CAST(dots AS FLOAT) as dots
                 FROM opl.opl_raw
                 ${baseWhere}
                 ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
                 
                 UNION ALL
                 
-                SELECT name, CAST(${rankColumn} AS FLOAT) as ${rankColumn}
+                SELECT name, CAST(${rankColumn} AS FLOAT) as ${rankColumn}, CAST(dots AS FLOAT) as dots
                 FROM opl.ipf_raw
                 ${baseWhere}
                 ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
@@ -123,7 +131,92 @@ export async function GET(req: Request) {
     const nearbyParams = [...baseParams, startRank, endRank];
 
     try {
-        const result = await pool.query(nearbyQuery, nearbyParams);
+        let result = await pool.query(nearbyQuery, nearbyParams);
+
+        // fallback on prev year if no data for current year
+        if (rankType === 'current' && result.rows.length === 0) {
+            effectiveYear = new Date().getFullYear() - 1;
+            hasCurrentYearData = false;
+
+            const currentYearStr = effectiveYear.toString();
+            
+            // rebuild conditions with previous year
+            const fallbackConditions: string[] = [];
+            const fallbackParams: (string | null)[] = [];
+
+            if (federation && federation !== 'all') {
+                fallbackConditions.push(`LOWER(federation) = $${fallbackParams.length + 1}`);
+                fallbackParams.push(federation.toLowerCase());
+            }
+
+            if (equipment && equipment !== 'all') {
+                fallbackConditions.push(`LOWER(equipment) = $${fallbackParams.length + 1}`);
+                fallbackParams.push(equipment.toLowerCase());
+            }
+
+            if (weightClass && weightClass !== 'All classes') {
+                const wcNum = weightClass.replace(' kg', '').replace('+', '');
+                fallbackConditions.push(`weightclasskg = $${fallbackParams.length + 1}`);
+                fallbackParams.push(wcNum);
+            }
+
+            if (division && division !== 'All Divisions') {
+                if (division === 'Junior') {
+                    fallbackConditions.push(`(division = $${fallbackParams.length + 1} OR division = $${fallbackParams.length + 2})`);
+                    fallbackParams.push('Junior', 'Juniors');
+                } else if (division === 'Sub-Junior') {
+                    fallbackConditions.push(`(division = $${fallbackParams.length + 1} OR division = $${fallbackParams.length + 2})`);
+                    fallbackParams.push('Sub-Junior', 'Sub-Juniors');
+                } else {
+                    fallbackConditions.push(`division = $${fallbackParams.length + 1}`);
+                    fallbackParams.push(division);
+                }
+            }
+
+            fallbackConditions.push(`date::text LIKE $${fallbackParams.length + 1}`);
+            fallbackParams.push(`${currentYearStr}%`);
+
+            baseWhere = fallbackConditions.length > 0 
+                ? `WHERE ${fallbackConditions.join(' AND ')}`
+                : '';
+
+            const fallbackQuery = `
+                WITH ranked_lifters AS (
+                    SELECT 
+                        name,
+                        MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
+                        MAX(CAST(dots AS FLOAT)) as dots_value,
+                        ROW_NUMBER() OVER (
+                            ORDER BY 
+                                MAX(CAST(${rankColumn} AS FLOAT)) DESC
+                                ${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) DESC' : ''}
+                        ) as rank
+                    FROM (
+                        SELECT name, CAST(${rankColumn} AS FLOAT) as ${rankColumn}, CAST(dots AS FLOAT) as dots
+                        FROM opl.opl_raw
+                        ${baseWhere}
+                        ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+                        
+                        UNION ALL
+                        
+                        SELECT name, CAST(${rankColumn} AS FLOAT) as ${rankColumn}, CAST(dots AS FLOAT) as dots
+                        FROM opl.ipf_raw
+                        ${baseWhere}
+                        ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+                    ) combined
+                    GROUP BY name
+                )
+                SELECT name, best_value, rank
+                FROM ranked_lifters
+                WHERE rank >= $${fallbackParams.length + 1} AND rank <= $${fallbackParams.length + 2}
+                ORDER BY rank ASC
+            `;
+
+            const fallbackNearbyParams = [...fallbackParams, startRank, endRank];
+            result = await pool.query(fallbackQuery, fallbackNearbyParams);
+        } else {
+            hasCurrentYearData = true;
+        }
         
         // searched athlete's all time best
         let athleteAllTimeBest: number | null = null;
@@ -178,7 +271,9 @@ export async function GET(req: Request) {
             athletes,
             isPoints,
             liftCategory,
-            unit: isPoints ? 'pts' : 'kg'
+            unit: isPoints ? 'pts' : 'kg',
+            currentYear: effectiveYear,
+            isCurrentYearData: hasCurrentYearData,
         });
     } catch (error) {
         console.error('Error fetching nearby athletes:', error);

@@ -101,6 +101,27 @@ export async function GET(req: Request) {
     const athleteResult = await pool.query(athleteQuery, [name]);
     const athleteBest = parseFloat(athleteResult.rows[0]?.best_value) || 0;
 
+    // get athlete's dots score for tie-breaking
+    let athleteDotsScore = 0;
+    if (rankColumn === 'totalkg') {
+        const dotsQuery = `
+            SELECT MAX(CAST(dots AS FLOAT)) as dots_value
+            FROM (
+                SELECT CAST(dots AS FLOAT) as dots
+                FROM opl.opl_raw
+                WHERE name = $1 AND CAST(dots AS FLOAT) > 0
+                
+                UNION ALL
+                
+                SELECT CAST(dots AS FLOAT) as dots
+                FROM opl.ipf_raw
+                WHERE name = $1 AND CAST(dots AS FLOAT) > 0
+            ) combined
+        `;
+        const dotsResult = await pool.query(dotsQuery, [name]);
+        athleteDotsScore = parseFloat(dotsResult.rows[0]?.dots_value) || 0;
+    }
+
     if (athleteBest === 0) {
         return NextResponse.json({
             name,
@@ -133,23 +154,28 @@ export async function GET(req: Request) {
     const currentRankingQuery = `
         SELECT 
             COUNT(DISTINCT CASE WHEN best_value > 0 THEN name END) as total,
-            COUNT(DISTINCT CASE WHEN best_value > $${currentParams.length + 1} THEN name END) + 1 as rank
+            COUNT(DISTINCT CASE 
+                WHEN best_value > $${currentParams.length + 1} THEN name
+                ${rankColumn === 'totalkg' ? `WHEN best_value = $${currentParams.length + 1} AND dots_value > $${currentParams.length + 2} THEN name` : ''}
+            END) + 1 as rank
         FROM (
-            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
             FROM opl.opl_raw
             ${currentWhere}
             GROUP BY name
             
             UNION ALL
             
-            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
             FROM opl.ipf_raw
             ${currentWhere}
             GROUP BY name
         ) combined
         WHERE best_value > 0
     `;
-    let currentRankingParams = [...currentParams, athleteBest];
+    let currentRankingParams = rankColumn === 'totalkg' 
+        ? [...currentParams, athleteBest, athleteDotsScore]
+        : [...currentParams, athleteBest];
     let currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
     
     let totalCurrent = parseInt(currentRankingResult.rows[0]?.total || '0', 10);
@@ -172,7 +198,9 @@ export async function GET(req: Request) {
             : '';
     
 
-        currentRankingParams = [...currentParams, athleteBest];
+        currentRankingParams = rankColumn === 'totalkg'
+            ? [...currentParams, athleteBest, athleteDotsScore]
+            : [...currentParams, athleteBest];
         currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
 
         totalCurrent = parseInt(currentRankingResult.rows[0]?.total || '0', 10);
@@ -186,9 +214,12 @@ export async function GET(req: Request) {
     const allTimeRankingQuery = `
         SELECT 
             COUNT(DISTINCT CASE WHEN best_value > 0 THEN name END) as total,
-            COUNT(DISTINCT CASE WHEN best_value > $${baseParams.length + 1} THEN name END) + 1 as rank
+            COUNT(DISTINCT CASE 
+                WHEN best_value > $${baseParams.length + 1} THEN name
+                ${rankColumn === 'totalkg' ? `WHEN best_value = $${baseParams.length + 1} AND dots_value > $${baseParams.length + 2} THEN name` : ''}
+            END) + 1 as rank
         FROM (
-            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
             FROM opl.opl_raw
             ${baseWhere}
             ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
@@ -196,14 +227,16 @@ export async function GET(req: Request) {
             
             UNION ALL
             
-            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
             FROM opl.ipf_raw
             ${baseWhere}
             ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
             GROUP BY name
         ) combined
     `;
-    const allTimeRankingParams = [...baseParams, athleteBest];
+    const allTimeRankingParams = rankColumn === 'totalkg'
+        ? [...baseParams, athleteBest, athleteDotsScore]
+        : [...baseParams, athleteBest];
     const allTimeRankingResult = await pool.query(allTimeRankingQuery, allTimeRankingParams);
     
     const totalAllTime = parseInt(allTimeRankingResult.rows[0]?.total || '0', 10);
@@ -224,9 +257,11 @@ export async function GET(req: Request) {
                 SELECT 
                     name,
                     best_value,
-                    ROW_NUMBER() OVER (ORDER BY best_value DESC) as rank
+                    ROW_NUMBER() OVER (
+                        ORDER BY best_value DESC${rankColumn === 'totalkg' ? ', dots_value DESC' : ''}
+                    ) as rank
                 FROM (
-                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
                     FROM opl.opl_raw
                     ${baseWhere}
                     ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
@@ -234,7 +269,7 @@ export async function GET(req: Request) {
                     
                     UNION ALL
                     
-                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
                     FROM opl.ipf_raw
                     ${baseWhere}
                     ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
@@ -272,9 +307,11 @@ export async function GET(req: Request) {
                 SELECT 
                     name,
                     best_value,
-                    ROW_NUMBER() OVER (ORDER BY best_value DESC) as rank
+                    ROW_NUMBER() OVER (
+                        ORDER BY best_value DESC${rankColumn === 'totalkg' ? ', dots_value DESC' : ''}
+                    ) as rank
                 FROM (
-                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
                     FROM opl.opl_raw
                     ${currentWhere}
                     AND CAST(${rankColumn} AS FLOAT) > 0
@@ -282,7 +319,7 @@ export async function GET(req: Request) {
                     
                     UNION ALL
                     
-                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+                    SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
                     FROM opl.ipf_raw
                     ${currentWhere}
                     AND CAST(${rankColumn} AS FLOAT) > 0
