@@ -1,8 +1,8 @@
 import { Pool } from 'pg';
+import { dbConfig } from './db-config';
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ...dbConfig,
   max: 3, //pool
 });
 

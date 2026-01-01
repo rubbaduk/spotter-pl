@@ -34,7 +34,16 @@ export default function FaqPage() {
                     OpenPowerlifting may exclude some athletes from rankings/competition lists due to legitimate reasons, or due to data/update issues.
                     <br></br>
                     <br></br>
-                    Use these rankings as a reference only. For qualification or eligibility, always defer to your federation's official platform.
+                    Note: We're aware of cases where athlete data doesn't match up. The way we query data differs from how OpenPowerlifting
+                    does and we're continuously trying to work on it.
+                    <br></br>
+                    <br></br>
+                    Sometimes athletes don't have assigned age divisions, or 
+                    regional/world competitions aren't included in federation/country rankings, etc. If you find a case yourself, 
+                    feel free to let us know through Github or Email below.
+                    <br></br>
+                    <br></br>
+                    Use these rankings as a reference only. For qualification or eligibility, always refer to your federation's official platform.
                   </p>
                 </div>
               </div>
@@ -81,7 +90,7 @@ export default function FaqPage() {
               <div className="card bg-[#1C1C1C] shadow-lg">
                 <div className="card-body">
                   <h3 className="card-title text-lg mb-2 italic">____ feature isn't working... You should implement ____, etc.</h3>
-                  <div className="opacity-80 space-y-3">
+                  <div className="opacity-80 space-y-4">
                     <p>For inquiries or suggestions, please reach out to:</p>
                     <a
                       href="mailto:spotterpowerlifting@gmail.com"
@@ -89,6 +98,17 @@ export default function FaqPage() {
                     >
                       spotterpowerlifting@gmail.com
                     </a>
+                    <div className="flex gap-4 mt-5">
+
+                      <a
+                        href="https://github.com/rubbaduk/spotter-pl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-outline btn-sm"
+                      >
+                        View on GitHub
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>

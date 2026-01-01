@@ -1,6 +1,8 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { calculateDots, calculateWilks, calculateGlossbrenner, calculateGoodlift } from '@/lib/points';
+import { fullyTestedFederations } from '@/data/testedFederations';
+import { getFederationsForCountry } from '@/data/federationCountryMap';
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
@@ -96,13 +98,40 @@ export async function GET(req: Request) {
         });
     }
 
+    // calculate dots score for tie-breaking
+    let athleteDotsScore = 0;
+    if (rankColumn === 'totalkg' && bodyweight > 0 && gender) {
+        const total = squat + bench + deadlift;
+        athleteDotsScore = calculateDots(gender, bodyweight, total);
+    }
+
     // build base filter conditions
     const baseConditions: string[] = [];
     const baseParams: (string | null)[] = [];
 
     if (federation && federation !== 'all') {
-        baseConditions.push(`LOWER(federation) = $${baseParams.length + 1}`);
-        baseParams.push(federation.toLowerCase());
+        if (federation === 'fully-tested') {
+            // filter to only fully-tested federations
+            const testedFedsList = fullyTestedFederations.map(f => `'${f}'`).join(', ');
+            baseConditions.push(`LOWER(federation) IN (${testedFedsList})`);
+        } else if (federation === 'all-tested') {
+            // filter to only tested lifters (tested = 'Yes')
+            baseConditions.push(`tested = $${baseParams.length + 1}`);
+            baseParams.push('Yes');
+        } else if (federation.startsWith('all-')) {
+            // country-based filtering (e.g., 'all-usa', 'all-australia')
+            const country = federation.replace('all-', '');
+            const countryName = country.charAt(0).toUpperCase() + country.slice(1);
+            const countryFeds = getFederationsForCountry(countryName);
+            if (countryFeds.length > 0) {
+                const fedsList = countryFeds.map(f => `'${f}'`).join(', ');
+                baseConditions.push(`LOWER(federation) IN (${fedsList})`);
+            }
+        } else {
+            // specific federation
+            baseConditions.push(`LOWER(federation) = $${baseParams.length + 1}`);
+            baseParams.push(federation.toLowerCase());
+        }
     }
 
     if (equipment && equipment !== 'all') {
@@ -135,39 +164,84 @@ export async function GET(req: Request) {
 
     // current rankings (current year only)
     const currentYear = new Date().getFullYear();
-    const currentYearStr = currentYear.toString();
+    let effectiveYear = currentYear;
+    let hasCurrentYearData = true;
+
+    let currentYearStr = effectiveYear.toString();
     
-    const currentConditions = [...baseConditions];
-    currentConditions.push(`date LIKE $${baseParams.length + 1} || '%'`);
-    const currentParams = [...baseParams, currentYearStr];
+    let currentConditions = [...baseConditions];
+    currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
+    let currentParams = [...baseParams, `${currentYearStr}%`];
     
-    const currentWhere = currentConditions.length > 0 
+    let currentWhere = currentConditions.length > 0 
         ? `WHERE ${currentConditions.join(' AND ')}`
         : '';
 
     // count all lifters in current category
     const currentCountQuery = `
         SELECT COUNT(DISTINCT name) as total
-        FROM opl.opl_raw
-        ${currentWhere}
-        AND CAST(${rankColumn} AS FLOAT) > 0
+        FROM (
+            SELECT name
+            FROM opl.opl_raw
+            ${currentWhere}
+            AND CAST(${rankColumn} AS FLOAT) > 0
+            
+            UNION
+            
+            SELECT name
+            FROM opl.ipf_raw
+            ${currentWhere}
+            AND CAST(${rankColumn} AS FLOAT) > 0
+        ) combined
     `;
-    const currentCountResult = await pool.query(currentCountQuery, currentParams);
-    const totalCurrent = parseInt(currentCountResult.rows[0]?.total || '0', 10);
+    let currentCountResult = await pool.query(currentCountQuery, currentParams);
+    let totalCurrent = parseInt(currentCountResult.rows[0]?.total || '0', 10);
+
+    // fallback on prev year if no data for current year
+    if (totalCurrent === 0) {
+        effectiveYear = currentYear - 1;
+        hasCurrentYearData = false;
+
+        currentYearStr = effectiveYear.toString();
+
+        currentConditions = [...baseConditions];
+        currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
+        currentParams = [...baseParams, `${currentYearStr}%`];
+
+        currentWhere = currentConditions.length > 0
+            ? `WHERE ${currentConditions.join(' AND ')}`
+            : '';
+
+        currentCountResult = await pool.query(currentCountQuery, currentParams);
+        totalCurrent = parseInt(currentCountResult.rows[0]?.total || '0', 10);
+    } else {
+        hasCurrentYearData = true;
+    }
 
     // count how many lifters have a better value than the manual entry
     const currentRankQuery = `
         SELECT COUNT(DISTINCT name) as better_count
         FROM (
-            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
             FROM opl.opl_raw
+            ${currentWhere}
+            AND CAST(${rankColumn} AS FLOAT) > 0
+            GROUP BY name
+            
+            UNION
+            
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
+            FROM opl.ipf_raw
             ${currentWhere}
             AND CAST(${rankColumn} AS FLOAT) > 0
             GROUP BY name
         ) subquery
         WHERE best_value > $${currentParams.length + 1}
+            ${rankColumn === 'totalkg' ? `OR (best_value = $${currentParams.length + 1} AND dots_value > $${currentParams.length + 2})` : ''}
     `;
-    const currentRankParams = [...currentParams, athleteBest];
+    const currentRankParams = rankColumn === 'totalkg'
+        ? [...currentParams, athleteBest, athleteDotsScore]
+        : [...currentParams, athleteBest];
     const currentRankResult = await pool.query(currentRankQuery, currentRankParams);
     const betterThanCurrent = parseInt(currentRankResult.rows[0]?.better_count || '0', 10);
     const currentRank = totalCurrent > 0 ? betterThanCurrent + 1 : null;
@@ -175,9 +249,19 @@ export async function GET(req: Request) {
     // all time rankings
     const allTimeCountQuery = `
         SELECT COUNT(DISTINCT name) as total
-        FROM opl.opl_raw
-        ${baseWhere}
-        AND CAST(${rankColumn} AS FLOAT) > 0
+        FROM (
+            SELECT name
+            FROM opl.opl_raw
+            ${baseWhere}
+            ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+            
+            UNION
+            
+            SELECT name
+            FROM opl.ipf_raw
+            ${baseWhere}
+            ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+        ) combined
     `;
     const allTimeCountResult = await pool.query(allTimeCountQuery, baseParams);
     const totalAllTime = parseInt(allTimeCountResult.rows[0]?.total || '0', 10);
@@ -186,15 +270,26 @@ export async function GET(req: Request) {
     const allTimeRankQuery = `
         SELECT COUNT(DISTINCT name) as better_count
         FROM (
-            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
             FROM opl.opl_raw
             ${baseWhere}
-            AND CAST(${rankColumn} AS FLOAT) > 0
+            ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
+            GROUP BY name
+            
+            UNION
+            
+            SELECT name, MAX(CAST(${rankColumn} AS FLOAT)) as best_value${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) as dots_value' : ''}
+            FROM opl.ipf_raw
+            ${baseWhere}
+            ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
             GROUP BY name
         ) subquery
         WHERE best_value > $${baseParams.length + 1}
+            ${rankColumn === 'totalkg' ? `OR (best_value = $${baseParams.length + 1} AND dots_value > $${baseParams.length + 2})` : ''}
     `;
-    const allTimeRankParams = [...baseParams, athleteBest];
+    const allTimeRankParams = rankColumn === 'totalkg'
+        ? [...baseParams, athleteBest, athleteDotsScore]
+        : [...baseParams, athleteBest];
     const allTimeRankResult = await pool.query(allTimeRankQuery, allTimeRankParams);
     const betterThanAllTime = parseInt(allTimeRankResult.rows[0]?.better_count || '0', 10);
     const allTimeRank = totalAllTime > 0 ? betterThanAllTime + 1 : null;
@@ -207,5 +302,7 @@ export async function GET(req: Request) {
         liftCategory,
         athleteBest,
         isPoints,
+        currentYear: effectiveYear,
+        isCurrentYearData: hasCurrentYearData,
     });
 }

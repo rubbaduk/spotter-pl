@@ -23,6 +23,21 @@ export async function GET(req: Request) {
             date
         FROM opl.opl_raw
         WHERE name = $1
+        
+        UNION ALL
+        
+        SELECT 
+            name,
+            sex,
+            country,
+            federation,
+            weightclasskg,
+            equipment,
+            division,
+            date
+        FROM opl.ipf_raw
+        WHERE name = $1
+        
         ORDER BY date DESC
         LIMIT 10
         `,

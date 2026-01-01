@@ -43,10 +43,22 @@ export default function RankingComparison({
 }: RankingComparisonProps) {
   const router = useRouter();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [rankType, setRankType] = useState<'current' | 'allTime'>('current');
+  // default to whichever rank is available
+  const [rankType, setRankType] = useState<'current' | 'allTime'>(
+    currentRank ? 'current' : allTimeRank ? 'allTime' : 'current'
+  );
   const [athletes, setAthletes] = useState<NearbyAthlete[]>([]);
   const [loading, setLoading] = useState(false);
   const [unit, setUnit] = useState('kg');
+
+  // update rankType when ranks become available
+  useEffect(() => {
+    if (rankType === 'current' && !currentRank && allTimeRank) {
+      setRankType('allTime');
+    } else if (rankType === 'allTime' && !allTimeRank && currentRank) {
+      setRankType('current');
+    }
+  }, [currentRank, allTimeRank, rankType]);
 
   useEffect(() => {
     const fetchNearbyAthletes = async () => {
@@ -75,7 +87,7 @@ export default function RankingComparison({
           const data = await response.json();
           let athletesList = data.athletes || [];
           
-          // If manual entry and not in list, insert it at the correct position
+          // if manual entry and not in list, insert it at the correct position
           if (isManualEntry && athleteValue !== undefined) {
             const manualEntryExists = athletesList.some((a: NearbyAthlete) => a.isCurrentAthlete);
             if (!manualEntryExists) {
@@ -93,7 +105,7 @@ export default function RankingComparison({
           setAthletes(athletesList);
           setUnit(data.unit || 'kg');
           
-          // Scroll to center the current athlete after data loads
+          // scroll to center the current athlete after data loads
           setTimeout(() => {
             if (scrollContainerRef.current) {
               const currentAthleteRow = scrollContainerRef.current.querySelector('.bg-primary\\/10');
@@ -103,7 +115,7 @@ export default function RankingComparison({
                 const rowTop = (currentAthleteRow as HTMLElement).offsetTop;
                 const rowHeight = (currentAthleteRow as HTMLElement).offsetHeight;
                 
-                // Calculate scroll position to center the row
+                // calculate scroll position to center the row
                 const scrollTo = rowTop - (containerHeight / 2) + (rowHeight / 2);
                 
                 container.scrollTop = scrollTo;

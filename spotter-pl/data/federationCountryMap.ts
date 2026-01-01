@@ -419,3 +419,10 @@ export function getCountryForFederation(federation: string): string {
   // look up in map
   return federationCountryMap[federation] || 'International';
 }
+
+// get all federations for a specific country
+export function getFederationsForCountry(country: string): string[] {
+  return Object.entries(federationCountryMap)
+    .filter(([_, fedCountry]) => fedCountry === country)
+    .map(([federation, _]) => federation);
+}
