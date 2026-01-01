@@ -46,4 +46,4 @@ const fallbackConfig = {
 };
 
 // export database configuration
-export const dbConfig = databaseUrl ? parseDatabaseUrl(databaseUrl) : fallbackConfig;
+export const dbConfig = databaseUrl ? parseDatabaseUrl(databaseUrl) || fallbackConfig : fallbackConfig;
