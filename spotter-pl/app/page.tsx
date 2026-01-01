@@ -425,7 +425,7 @@ function HomeContent() {
       {/* search section - full viewport height */}
       <main className="min-h-dvh mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-30 pt-24">
         <div className="flex flex-col gap-6">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 min-h-28 sm:min-h-0">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 min-h-28 sm:min-h-0 mt-6.5">
             <h1 className="text-4xl font-bold sm:text-5xl whitespace-nowrap">
               Let's spot
             </h1>
