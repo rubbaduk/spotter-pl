@@ -115,14 +115,17 @@ export async function GET(req: Request) {
 
     // current rankings (current year only)
     const currentYear = new Date().getFullYear();
-    const currentYearStr = currentYear.toString();
+    let effectiveYear = currentYear;
+    let hasCurrentYearData = true;
+
+    let currentYearStr = effectiveYear.toString();
     
-    const currentConditions = [...baseConditions];
+    let currentConditions = [...baseConditions];
     // date field might be stored as "2025" or "2025-01-15", so check if it starts with current year
     currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
-    const currentParams = [...baseParams, `${currentYearStr}%`];
+    let currentParams = [...baseParams, `${currentYearStr}%`];
     
-    const currentWhere = currentConditions.length > 0 
+    let currentWhere = currentConditions.length > 0 
         ? `WHERE ${currentConditions.join(' AND ')}`
         : '';
 
@@ -146,11 +149,38 @@ export async function GET(req: Request) {
         ) combined
         WHERE best_value > 0
     `;
-    const currentRankingParams = [...currentParams, athleteBest];
-    const currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
+    let currentRankingParams = [...currentParams, athleteBest];
+    let currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
     
-    const totalCurrent = parseInt(currentRankingResult.rows[0]?.total || '0', 10);
-    const currentRank = currentRankingResult.rows[0]?.rank || null;
+    let totalCurrent = parseInt(currentRankingResult.rows[0]?.total || '0', 10);
+    
+    // fallback on prev year if not data for current year
+    // this was done on 1/1/2026 lol
+
+    if (totalCurrent === 0) {
+        effectiveYear = currentYear - 1;
+        hasCurrentYearData = false;
+
+        currentYearStr = effectiveYear.toString();
+
+        currentConditions = [...baseConditions];
+        currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
+        currentParams = [...baseParams, `${currentYearStr}%`];
+
+        currentWhere = currentConditions.length > 0
+            ? `WHERE ${currentConditions.join(' AND ')}`
+            : '';
+    
+
+        currentRankingParams = [...currentParams, athleteBest];
+        currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
+
+        totalCurrent = parseInt(currentRankingResult.rows[0]?.total || '0', 10);
+    } else {
+        hasCurrentYearData = true;
+    }
+
+    const currentRank = totalCurrent > 0 ? (currentRankingResult.rows[0]?.rank ?? null) : null;
 
     // all time rankings - combine count and rank
     const allTimeRankingQuery = `
@@ -280,7 +310,7 @@ export async function GET(req: Request) {
     
     return NextResponse.json({
         name,
-        currentRank: currentRankingResult.rows[0]?.rank || null,
+        currentRank,
         allTimeRank,
         totalCurrent,
         totalAllTime,
@@ -289,5 +319,7 @@ export async function GET(req: Request) {
         isPoints,
         currentMilestoneInfo,
         allTimeMilestoneInfo,
+        currentYear: effectiveYear,
+        isCurrentYearData: hasCurrentYearData,
     });
 }
