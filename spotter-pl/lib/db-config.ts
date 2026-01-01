@@ -16,7 +16,7 @@ const parseDatabaseUrl = (url: string) => {
       host: urlObj.hostname,
       port: parseInt(urlObj.port) || 5432,
       database: urlObj.pathname.substring(1),
-      ssl: urlObj.searchParams.get('sslmode') === 'require' ? { rejectUnauthorized: true } : false
+      ssl: urlObj.searchParams.get('sslmode') === 'require' ? { rejectUnauthorized: false } : false
     };
   } catch (error) {
     console.error('Invalid DATABASE_URL format');
@@ -40,7 +40,7 @@ const fallbackConfig = {
   port: parseInt(process.env.DB_PORT!),
   database: process.env.DB_NAME ,
   ssl: {
-    rejectUnauthorized: true,
+    rejectUnauthorized: false,
     ca: process.env.SSL_CERT 
   }
 };
