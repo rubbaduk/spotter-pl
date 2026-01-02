@@ -15,6 +15,7 @@ https://www.openpowerlifting.org
 - Filter by federation, weight class, division, and tested status
 - Find athletes with similar strength levels
 
+
 ## Contributing!
 
 1. Fork the repository
@@ -30,12 +31,14 @@ https://www.openpowerlifting.org
 - Tailwind CSS
 - DaisyUI
 
+
 ## Technical Features
-- Automated weekly cron job, using custom ETL pipeline to injest 3+ million rows
+- Automated weekly cron job, using custom ETL pipeline to ingest 3+ million rows
 - Utilizes PostgreSQL for indexing and trigram (pg_trgm) implementation for fuzzy athlete searches
 - Maintains mappings of 100+ federations and countries with respective athletes in each
 - URL-based state persistence allows filters and search results to be reflected in the URL - allowing shares and bookmarking
 - Database managed on Aiven, deployed on Vercel
+
 
 ## Installation
 
@@ -52,6 +55,7 @@ https://www.openpowerlifting.org
    ```bash
    npm run dev
    ```
+
 
 ## Environment Variables
 
@@ -73,6 +77,7 @@ DB_PORT=
 DB_NAME=
 SSL_CERT=
 ```
+
 
 ## Database Setup
 
@@ -114,5 +119,6 @@ scripts/           # Database scripts
 ## Performance Notes
 
 - Database queries may take 10-30 seconds for broad filter combinations
+- Site and database are currently hosted in Sydney, Australia
 - Connection pooling is configured with max 3 connections
 - SSL is required for database connections
