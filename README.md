@@ -1,16 +1,26 @@
 # SpotterPL.com
 
 A powerlifting database and athlete comparison tool.
-This site uses data from the OpenPowerlifting project, https://www.openpowerlifting.org.
-[Reference](https://openpowerlifting.gitlab.io/opl-csv/introduction.html)
+This site uses data from the OpenPowerlifting project,
+https://www.openpowerlifting.org
+
+[Data Service Reference](https://openpowerlifting.gitlab.io/opl-csv/introduction.html)
 
 ## Features
 
 - Search powerlifting athletes across multiple federations
+- Users can also manually enter SBD (Squat, Bench, Deadlift) numbers to compare against pre-existing athletes
 - Compare athlete rankings and personal records
 - View progression charts and meet history
 - Filter by federation, weight class, division, and tested status
 - Find athletes with similar strength levels
+
+## Contributing!
+
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
+
 
 ## Tech Stack
 
@@ -19,6 +29,13 @@ This site uses data from the OpenPowerlifting project, https://www.openpowerlift
 - PostgreSQL (Aiven)
 - Tailwind CSS
 - DaisyUI
+
+## Technical Features
+- Automated weekly cron job, using custom ETL pipeline to injest 3+ million rows
+- Utilizes PostgreSQL for indexing and trigram (pg_trgm) implementation for fuzzy athlete searches
+- Maintains mappings of 100+ federations and countries with respective athletes in each
+- URL-based state persistence allows filters and search results to be reflected in the URL - allowing shares and bookmarking
+- Database managed on Aiven, deployed on Vercel
 
 ## Installation
 
@@ -99,9 +116,3 @@ scripts/           # Database scripts
 - Database queries may take 10-30 seconds for broad filter combinations
 - Connection pooling is configured with max 3 connections
 - SSL is required for database connections
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
