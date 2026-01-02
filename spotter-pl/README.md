@@ -1,36 +1,105 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SpotterPL.com
 
-## Getting Started
+A powerlifting database and athlete comparison tool.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Search powerlifting athletes across multiple federations
+- Compare athlete rankings and personal records
+- View progression charts and meet history
+- Filter by federation, weight class, division, and tested status
+- Find athletes with similar strength levels
+
+## Tech Stack
+
+- Next.js 16
+- TypeScript
+- PostgreSQL (Aiven)
+- Tailwind CSS
+- DaisyUI
+
+## Installation
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Set up environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+4. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+## Environment Variables
+
+Required for database connection:
+
+```
+DATABASE_URL=postgres://user:password@host:port/database?sslmode=require
+SSL_CERT=-----BEGIN CERTIFICATE-----
+[Your SSL certificate]
+-----END CERTIFICATE-----
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Or use individual variables:
+```
+DB_USER=
+DB_PASSWORD=
+DB_HOST=
+DB_PORT=
+DB_NAME=
+SSL_CERT=
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The database uses the Open Powerlifting dataset. To populate:
 
-## Learn More
+```bash
+npm run setup-schema
+npm run download-data
+npm run import-data
+npm run populate-lifter-search
+```
 
-To learn more about Next.js, take a look at the following resources:
+For automated weekly updates:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run update-db
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+To schedule automatic updates (runs Sundays at 2:00 AM):
 
-## Deploy on Vercel
+```bash
+bash scripts/setup-cron.sh
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Project Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+app/
+├── api/           # API routes
+├── components/    # React components
+└── page.tsx       # Main page
+lib/
+├── db.ts          # Database connection
+└── db-config.ts   # Database configuration
+data/              # Static data files
+scripts/           # Database scripts
+```
+
+## Performance Notes
+
+- Database queries may take 10-30 seconds for broad filter combinations
+- Connection pooling is configured with max 3 connections
+- SSL is required for database connections
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request

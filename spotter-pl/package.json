@@ -11,7 +11,8 @@
     "download-data": "tsx scripts/download-data.ts",
     "import-data": "tsx scripts/import-data.ts",
     "populate-lifter-search": "tsx scripts/populate-lifter-search.ts",
-    "test-db": "tsx scripts/test-db.ts"
+    "test-db": "tsx scripts/test-db.ts",
+    "update-db": "bash scripts/update-database.sh"
   },
   "dependencies": {
     "@vercel/analytics": "^1.6.1",
