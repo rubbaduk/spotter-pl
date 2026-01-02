@@ -2,6 +2,7 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { fullyTestedFederations } from '@/data/testedFederations';
 import { getFederationsForCountry } from '@/data/federationCountryMap';
+import { getDivisionSqlCondition } from '@/lib/divisionMapping';
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
@@ -86,15 +87,10 @@ export async function GET(req: Request) {
     }
 
     if (division && division !== 'All Divisions') {
-        if (division === 'Junior') {
-            baseConditions.push(`(division = $${baseParams.length + 1} OR division = $${baseParams.length + 2})`);
-            baseParams.push('Junior', 'Juniors');
-        } else if (division === 'Sub-Junior') {
-            baseConditions.push(`(division = $${baseParams.length + 1} OR division = $${baseParams.length + 2})`);
-            baseParams.push('Sub-Junior', 'Sub-Juniors');
-        } else {
-            baseConditions.push(`division = $${baseParams.length + 1}`);
-            baseParams.push(division);
+        const divisionResult = getDivisionSqlCondition(division, baseParams.length + 1);
+        if (divisionResult.sql) {
+            baseConditions.push(divisionResult.sql);
+            baseParams.push(...divisionResult.values);
         }
     }
 
