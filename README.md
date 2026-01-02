@@ -1,6 +1,8 @@
 # SpotterPL.com
 
 A powerlifting database and athlete comparison tool.
+This site uses data from the OpenPowerlifting project, https://www.openpowerlifting.org.
+[Reference](https://openpowerlifting.gitlab.io/opl-csv/introduction.html)
 
 ## Features
 
