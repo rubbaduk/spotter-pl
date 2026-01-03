@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { fullyTestedFederations } from '@/data/testedFederations';
 import { getFederationsForCountry } from '@/data/federationCountryMap';
 import { getDivisionSqlCondition } from '@/lib/divisionMapping';
+import { getEquipmentSqlCondition } from '@/lib/equipmentMapping';
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
@@ -51,9 +52,12 @@ export async function GET(req: Request) {
     }
 
     if (equipment && equipment !== 'all') {
-        filterConditions.push(`LOWER(equipment) = $${paramIndex}`);
-        params.push(equipment.toLowerCase());
-        paramIndex++;
+        const equipmentResult = getEquipmentSqlCondition(equipment, paramIndex);
+        if (equipmentResult.sql) {
+            filterConditions.push(equipmentResult.sql);
+            params.push(...equipmentResult.values);
+            paramIndex += equipmentResult.paramCount;
+        }
     }
 
     // weight class comes as "83 kg", need to extract just the number
@@ -64,7 +68,7 @@ export async function GET(req: Request) {
         paramIndex++;
     }
 
-    if (division && division !== 'All Divisions') {
+    if (division && division !== 'Open') {
         const divisionResult = getDivisionSqlCondition(division, paramIndex);
         if (divisionResult.sql) {
             filterConditions.push(divisionResult.sql);

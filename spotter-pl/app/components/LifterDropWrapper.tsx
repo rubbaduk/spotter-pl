@@ -48,13 +48,10 @@ export default function LifterSearchBar({
         setWeightClass(data.weightClass);
       }
 
-      if (data.division) {
-        setAgeDivision(data.division);
-      }
+      // division defaults to 'Open'
 
-      if (data.equipment) {
-        setEquipment(data.equipment);
-      }
+      // Don't auto-set equipment - let user control it
+      // equipment defaults to 'raw+wraps' in parent component
 
       setTested(null);
 

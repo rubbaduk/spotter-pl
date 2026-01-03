@@ -4,6 +4,7 @@ import { calculateDots, calculateWilks, calculateGlossbrenner, calculateGoodlift
 import { fullyTestedFederations } from '@/data/testedFederations';
 import { getFederationsForCountry } from '@/data/federationCountryMap';
 import { getDivisionSqlCondition } from '@/lib/divisionMapping';
+import { getEquipmentSqlCondition } from '@/lib/equipmentMapping';
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
@@ -136,8 +137,11 @@ export async function GET(req: Request) {
     }
 
     if (equipment && equipment !== 'all') {
-        baseConditions.push(`LOWER(equipment) = $${baseParams.length + 1}`);
-        baseParams.push(equipment.toLowerCase());
+        const equipmentResult = getEquipmentSqlCondition(equipment, baseParams.length + 1);
+        if (equipmentResult.sql) {
+            baseConditions.push(equipmentResult.sql);
+            baseParams.push(...equipmentResult.values);
+        }
     }
 
     if (weightClass && weightClass !== 'All classes') {
@@ -146,7 +150,7 @@ export async function GET(req: Request) {
         baseParams.push(wcNum);
     }
 
-    if (division && division !== 'All Divisions') {
+    if (division && division !== 'Open') {
         const divisionResult = getDivisionSqlCondition(division, baseParams.length + 1);
         if (divisionResult.sql) {
             baseConditions.push(divisionResult.sql);

@@ -13,6 +13,7 @@ import {
 } from "@/data/federations";
 import { getCountryForFederation } from "@/data/federationCountryMap";
 import { calculateDots, calculateWilks, calculateGlossbrenner, calculateGoodlift } from '@/lib/points';
+import { equipmentOptions } from '@/lib/equipmentMapping';
 
 // IMPORT OPTIONS FROM OPENPL - CSV OR MANUALLY ENTER
 // - store all new instances from csv into object
@@ -49,7 +50,6 @@ const weightClasses = [
   "53 kg", "59 kg", "66 kg", "74 kg", "83 kg", "93 kg", "100 kg", "105 kg", "110 kg", "120 kg", "120+ kg", "125 kg", "140 kg", "140+ kg",
 ];
 const divisions = [
-  "All Divisions",
   "Open",
   "Junior",
   "Sub-Junior",
@@ -57,7 +57,6 @@ const divisions = [
   "Masters 2",
   "Masters 3",
   "Masters 4",
-  "Special Olympics"
 ];
 
 const liftCategories = {
@@ -167,9 +166,9 @@ function HomeContent() {
   const [federation, setFederation] = useState(federationTopOptions[0]?.value ?? "all");
   const [country, setCountry] = useState("International");
   const [weightClass, setWeightClass] = useState("All classes");
-  const [ageDivision, setAgeDivision] = useState("All Divisions");
+  const [ageDivision, setAgeDivision] = useState("Open");
   const [tested, setTested] = useState<string | null>(null);
-  const [equipment, setEquipment] = useState("all");
+  const [equipment, setEquipment] = useState("raw+wraps");
   const [liftCategory, setLiftCategory] = useState("Total");
   
   // manual entry state
@@ -226,7 +225,7 @@ function HomeContent() {
           if (results.federation !== 'all') rankParams.set('federation', results.federation);
           if (results.equipment !== 'all') rankParams.set('equipment', results.equipment);
           if (results.weightClass !== 'All classes') rankParams.set('weightClass', results.weightClass);
-          if (results.division !== 'All Divisions') rankParams.set('division', results.division);
+          if (results.division !== 'Open') rankParams.set('division', results.division);
           rankParams.set('lift', results.liftCategory);
           
           // add manual lift values
@@ -254,7 +253,7 @@ function HomeContent() {
           if (results.federation !== 'all') params.set('federation', results.federation);
           if (results.equipment !== 'all') params.set('equipment', results.equipment);
           if (results.weightClass !== 'All classes') params.set('weightClass', results.weightClass);
-          if (results.division !== 'All Divisions') params.set('division', results.division);
+          if (results.division !== 'Open') params.set('division', results.division);
           params.set('lift', results.liftCategory);
 
           // fetch both bests and ranking in parallel
@@ -349,8 +348,8 @@ function HomeContent() {
         federation: fed || "all",
         country: ctry || "International",
         weightClass: wc || "All classes",
-        division: div || "All Divisions",
-        equipment: eq || "all",
+        division: div || "Open",
+        equipment: eq || "raw+wraps",
         liftCategory: lift || "Total",
         isManualEntry: manual,
         manualSquat: squat ? parseFloat(squat) : undefined,
@@ -386,8 +385,8 @@ function HomeContent() {
     if (federation && federation !== 'all') params.set('federation', federation);
     if (country && country !== 'International') params.set('country', country);
     if (weightClass && weightClass !== 'All classes') params.set('weightClass', weightClass);
-    if (ageDivision && ageDivision !== 'All Divisions') params.set('division', ageDivision);
-    if (equipment && equipment !== 'all') params.set('equipment', equipment);
+    if (ageDivision && ageDivision !== 'Open') params.set('division', ageDivision);
+    if (equipment && equipment !== 'raw+wraps') params.set('equipment', equipment);
     if (liftCategory && liftCategory !== 'Total') params.set('lift', liftCategory);
 
     // update URL without full reload
@@ -668,6 +667,28 @@ function HomeContent() {
           </div>
         </div>
 
+        {/* Equipment filter */}
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-4">
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text uppercase text-xs font-semibold tracking-wider">
+                Equipment
+              </span>
+            </label>
+            <select
+              className="select select-bordered w-full outline-none focus:outline-none focus:ring-0"
+              value={equipment}
+              onChange={(e) => setEquipment(e.target.value)}
+            >
+              {equipmentOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {/* Slow Query Warning */}
         {showSlowQueryWarning && (
           <div className="text-xs opacity-60 text-center -mb-6 -mt-5">
@@ -707,7 +728,7 @@ function HomeContent() {
                   results.federation !== 'all' && results.federation?.toUpperCase(),
                   results.country !== 'International' && results.country,
                   results.weightClass !== 'All classes' && results.weightClass,
-                  results.division !== 'All Divisions' && results.division,
+                  results.division !== 'Open' && results.division,
                   results.equipment !== "all" &&
                     (results.equipment?.charAt(0).toUpperCase() + results.equipment?.slice(1)),
                   results.liftCategory,
@@ -834,7 +855,7 @@ function HomeContent() {
                             </p>
                             <p className="text-xs opacity-50 mt-2">
                               {results.weightClass !== 'All classes' && results.weightClass} 
-                              {results.division !== 'All Divisions' && ` • ${results.division}`}
+                              {results.division !== 'Open' && ` • ${results.division}`}
                               {results.federation !== 'all' && ` • ${results.federation.toUpperCase()}`}
                             </p>
                             <p className="text-xs opacity-50">
@@ -880,7 +901,7 @@ function HomeContent() {
                             </p>
                             <p className="text-xs opacity-50 mt-2">
                               {results.weightClass !== 'All classes' && results.weightClass} 
-                              {results.division !== 'All Divisions' && ` • ${results.division}`}
+                              {results.division !== 'Open' && ` • ${results.division}`}
                               {results.federation !== 'all' && ` • ${results.federation.toUpperCase()}`}
                             </p>
                             <p className="text-xs opacity-50">
