@@ -14,6 +14,21 @@ export default function FaqPage() {
             <div className="space-y-4">
               <div className="card bg-[#1C1C1C] shadow-lg">
                 <div className="card-body">
+                  <h3 className="card-title text-lg mb-2">How does 'Spot Me' work?</h3>
+                  <p className="opacity-80">
+                    The 'Spot Me' feature works by grabbing the athlete's best total of all time.
+                    <br></br>
+                    
+                    Federations and divisions are selected through the athlete's <a className="font-bold">most recent competition</a>
+                    , 
+                    <br></br>
+                    hence initial pre-selected filters may be inaccurate to the athlete's division.
+      
+                  </p>
+                </div>
+              </div>
+              <div className="card bg-[#1C1C1C] shadow-lg">
+                <div className="card-body">
                   <h3 className="card-title text-lg mb-2">Where does the data come from?</h3>
                   <p className="opacity-80">
                     Athlete data is extracted directly from
