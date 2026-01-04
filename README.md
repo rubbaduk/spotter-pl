@@ -1,5 +1,13 @@
 # SpotterPL.com
 
+<p>
+  <img src="https://github.com/user-attachments/assets/88462ecb-8f64-4e50-a5d8-5237549556c4" width="240" />
+  <img src="https://github.com/user-attachments/assets/7f80a035-d98d-4bc1-8636-ef28563913b0" width="240" />
+  <img src="https://github.com/user-attachments/assets/47d70958-4edd-4c19-98b7-d96e1c97b86b" width="240" />
+</p>
+
+
+
 A powerlifting database and athlete comparison tool.
 This site uses data from the OpenPowerlifting project,
 https://www.openpowerlifting.org
