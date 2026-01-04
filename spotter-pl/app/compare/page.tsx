@@ -249,7 +249,7 @@ function CompareContent() {
       {/* search section - full viewport height */}
       <main className="min-h-dvh flex items-center justify-center px-6 pt-16">
         <div className="w-full max-w-4xl">
-          <div className="text-center mb-12">
+          <div className="text-center mb-12 -mt-11">
             <h1 className="text-5xl font-bold mb-4">1v1</h1>
             <p className="text-lg opacity-70">
               Compare two powerlifters side-by-side

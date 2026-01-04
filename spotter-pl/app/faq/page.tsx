@@ -22,8 +22,15 @@ export default function FaqPage() {
                     Federations and divisions are selected through the athlete's <a className="font-bold">most recent competition</a>
                     , 
                     <br></br>
-                    hence initial pre-selected filters may be inaccurate to the athlete's division.
-      
+                    hence initial pre-selected filters may be inaccurate to the athlete's main division.
+                    <br></br>
+                    <br></br>
+                    Current rankings are based off athletes that have competed within the current year.
+                    <br></br>
+                    If there is no competition data for the current year, rankings will resort to the previous year.
+                    <br></br>
+                    <br></br>
+                    If athletes are ranked based off total, equal totals will be tie-broken based off Dots
                   </p>
                 </div>
               </div>
