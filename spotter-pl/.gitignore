@@ -3,6 +3,7 @@
 notes.txt
 downloads
 index.ts
+/scripts/com.spotterpl.update-database.plist
 
 # dependencies
 /node_modules
