@@ -101,14 +101,30 @@ export async function GET(req: Request) {
         }
     }
 
-    // add year filter for current rankings
-    let effectiveYear = new Date().getFullYear();
-    let hasCurrentYearData = true;
+    // add date filter for current rankings - hybrid logic:
+    // April onwards: current year only
+    // Jan-Mar: rolling 12 months (includes previous year data)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed (0 = Jan, 3 = April)
+    const isBeforeApril = currentMonth < 3; // Jan, Feb, Mar
+    let dateFilterDescription: string = '';
 
     if (rankType === 'current') {
-        let currentYearStr = effectiveYear.toString();
-        baseConditions.push(`date::text LIKE $${baseParams.length + 1}`);
-        baseParams.push(`${currentYearStr}%`);
+        if (isBeforeApril) {
+            // Jan-Mar: use rolling 12 months
+            const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+            const rolling12MonthDate = twelveMonthsAgo.toISOString().split('T')[0];
+            baseConditions.push(`date >= $${baseParams.length + 1}`);
+            baseParams.push(rolling12MonthDate);
+            dateFilterDescription = `rolling12m_from_${rolling12MonthDate}`;
+        } else {
+            // April onwards: current year only
+            const currentYearStr = currentYear.toString();
+            baseConditions.push(`date::text LIKE $${baseParams.length + 1}`);
+            baseParams.push(`${currentYearStr}%`);
+            dateFilterDescription = `year_${currentYear}`;
+        }
     }
 
     let baseWhere = baseConditions.length > 0 
@@ -181,110 +197,7 @@ export async function GET(req: Request) {
             athleteAllTimeBest = parseFloat(athleteBestResult.rows[0]?.best_value) || null;
         }
 
-        let result = await pool.query(nearbyQuery, nearbyParams);
-
-        // fallback on prev year if no data for current year
-        if (rankType === 'current' && result.rows.length === 0) {
-            effectiveYear = new Date().getFullYear() - 1;
-            hasCurrentYearData = false;
-
-            const currentYearStr = effectiveYear.toString();
-            
-            // rebuild conditions with previous year
-            const fallbackConditions: string[] = [];
-            const fallbackParams: (string | null)[] = [];
-
-            if (federation && federation !== 'all') {
-                if (federation === 'fully-tested') {
-                    // filter to only fully-tested federations
-                    const testedFedsList = fullyTestedFederations.map(f => `'${f}'`).join(', ');
-                    fallbackConditions.push(`LOWER(federation) IN (${testedFedsList})`);
-                } else if (federation === 'all-tested') {
-                    // filter to only tested lifters (tested = 'Yes')
-                    fallbackConditions.push(`tested = $${fallbackParams.length + 1}`);
-                    fallbackParams.push('Yes');
-                } else if (federation.startsWith('all-')) {
-                    // country-based filtering (e.g., 'all-usa', 'all-australia')
-                    const country = federation.replace('all-', '');
-                    const countryName = country.charAt(0).toUpperCase() + country.slice(1);
-                    const countryFeds = getFederationsForCountry(countryName);
-                    if (countryFeds.length > 0) {
-                        const fedsList = countryFeds.map(f => `'${f}'`).join(', ');
-                        fallbackConditions.push(`LOWER(federation) IN (${fedsList})`);
-                    }
-                } else {
-                    // specific federation
-                    fallbackConditions.push(`LOWER(federation) = $${fallbackParams.length + 1}`);
-                    fallbackParams.push(federation.toLowerCase());
-                }
-            }
-
-            if (equipment && equipment !== 'all') {
-                const equipmentResult = getEquipmentSqlCondition(equipment, fallbackParams.length + 1);
-                if (equipmentResult.sql) {
-                    fallbackConditions.push(equipmentResult.sql);
-                    fallbackParams.push(...equipmentResult.values);
-                }
-            }
-
-            if (weightClass && weightClass !== 'All classes') {
-                const wcNum = weightClass.replace(' kg', '').replace('+', '');
-                fallbackConditions.push(`weightclasskg = $${fallbackParams.length + 1}`);
-                fallbackParams.push(wcNum);
-            }
-
-            if (division && division !== 'Open') {
-                const divisionResult = getDivisionSqlCondition(division, fallbackParams.length + 1);
-                if (divisionResult.sql) {
-                    fallbackConditions.push(divisionResult.sql);
-                    fallbackParams.push(...divisionResult.values);
-                }
-            }
-
-            fallbackConditions.push(`date::text LIKE $${fallbackParams.length + 1}`);
-            fallbackParams.push(`${currentYearStr}%`);
-
-            baseWhere = fallbackConditions.length > 0 
-                ? `WHERE ${fallbackConditions.join(' AND ')}`
-                : '';
-
-            const fallbackQuery = `
-                WITH ranked_lifters AS (
-                    SELECT 
-                        name,
-                        MAX(CAST(${rankColumn} AS FLOAT)) as best_value,
-                        MAX(CAST(dots AS FLOAT)) as dots_value,
-                        ROW_NUMBER() OVER (
-                            ORDER BY 
-                                MAX(CAST(${rankColumn} AS FLOAT)) DESC
-                                ${rankColumn === 'totalkg' ? ', MAX(CAST(dots AS FLOAT)) DESC' : ''}
-                        ) as rank
-                    FROM (
-                        SELECT name, CAST(${rankColumn} AS FLOAT) as ${rankColumn}, CAST(dots AS FLOAT) as dots
-                        FROM opl.opl_raw
-                        ${baseWhere}
-                        ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
-                        
-                        UNION ALL
-                        
-                        SELECT name, CAST(${rankColumn} AS FLOAT) as ${rankColumn}, CAST(dots AS FLOAT) as dots
-                        FROM opl.ipf_raw
-                        ${baseWhere}
-                        ${baseWhere ? 'AND' : 'WHERE'} CAST(${rankColumn} AS FLOAT) > 0
-                    ) combined
-                    GROUP BY name
-                )
-                SELECT name, best_value, rank
-                FROM ranked_lifters
-                WHERE rank >= $${fallbackParams.length + 1} AND rank <= $${fallbackParams.length + 2}
-                ORDER BY rank ASC
-            `;
-
-            const fallbackNearbyParams = [...fallbackParams, startRank, endRank];
-            result = await pool.query(fallbackQuery, fallbackNearbyParams);
-        } else {
-            hasCurrentYearData = true;
-        }
+        const result = await pool.query(nearbyQuery, nearbyParams);
         
         let athletes = result.rows.map(row => ({
             name: row.name,
@@ -322,8 +235,8 @@ export async function GET(req: Request) {
             isPoints,
             liftCategory,
             unit: isPoints ? 'pts' : 'kg',
-            currentYear: effectiveYear,
-            isCurrentYearData: hasCurrentYearData,
+            dateFilter: dateFilterDescription,
+            isRolling12Months: isBeforeApril,
         });
     } catch (error) {
         console.error('Error fetching nearby athletes:', error);

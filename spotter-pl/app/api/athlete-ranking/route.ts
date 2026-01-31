@@ -156,19 +156,34 @@ export async function GET(req: Request) {
         });
     }
 
-    // current rankings (current year only)
-    const currentYear = new Date().getFullYear();
-    let effectiveYear = currentYear;
-    let hasCurrentYearData = true;
-
-    let currentYearStr = effectiveYear.toString();
+    // current rankings - hybrid date filtering:
+    // April onwards: current year only
+    // Jan-Mar: rolling 12 months (includes previous year data)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed (0 = Jan, 3 = April)
+    const isBeforeApril = currentMonth < 3; // Jan, Feb, Mar
     
-    let currentConditions = [...baseConditions];
-    // date field might be stored as "2025" or "2025-01-15", so check if it starts with current year
-    currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
-    let currentParams = [...baseParams, `${currentYearStr}%`];
+    let dateFilterDescription: string;
+    const currentConditions = [...baseConditions];
+    let currentParams: (string | null)[];
     
-    let currentWhere = currentConditions.length > 0 
+    if (isBeforeApril) {
+        // Jan-Mar: use rolling 12 months
+        const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        const rolling12MonthDate = twelveMonthsAgo.toISOString().split('T')[0];
+        currentConditions.push(`date >= $${baseParams.length + 1}`);
+        currentParams = [...baseParams, rolling12MonthDate];
+        dateFilterDescription = `rolling12m_from_${rolling12MonthDate}`;
+    } else {
+        // April onwards: current year only
+        const currentYearStr = currentYear.toString();
+        currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
+        currentParams = [...baseParams, `${currentYearStr}%`];
+        dateFilterDescription = `year_${currentYear}`;
+    }
+    
+    const currentWhere = currentConditions.length > 0 
         ? `WHERE ${currentConditions.join(' AND ')}`
         : '';
 
@@ -195,40 +210,12 @@ export async function GET(req: Request) {
         ) combined
         WHERE best_value > 0
     `;
-    let currentRankingParams = rankColumn === 'totalkg' 
+    const currentRankingParams = rankColumn === 'totalkg' 
         ? [...currentParams, athleteBest, athleteDotsScore]
         : [...currentParams, athleteBest];
-    let currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
+    const currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
     
-    let totalCurrent = parseInt(currentRankingResult.rows[0]?.total || '0', 10);
-    
-    // fallback on prev year if not data for current year
-    // this was done on 1/1/2026 lol
-
-    if (totalCurrent === 0) {
-        effectiveYear = currentYear - 1;
-        hasCurrentYearData = false;
-
-        currentYearStr = effectiveYear.toString();
-
-        currentConditions = [...baseConditions];
-        currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
-        currentParams = [...baseParams, `${currentYearStr}%`];
-
-        currentWhere = currentConditions.length > 0
-            ? `WHERE ${currentConditions.join(' AND ')}`
-            : '';
-    
-
-        currentRankingParams = rankColumn === 'totalkg'
-            ? [...currentParams, athleteBest, athleteDotsScore]
-            : [...currentParams, athleteBest];
-        currentRankingResult = await pool.query(currentRankingQuery, currentRankingParams);
-
-        totalCurrent = parseInt(currentRankingResult.rows[0]?.total || '0', 10);
-    } else {
-        hasCurrentYearData = true;
-    }
+    const totalCurrent = parseInt(currentRankingResult.rows[0]?.total || '0', 10);
 
     const currentRank = totalCurrent > 0 ? (currentRankingResult.rows[0]?.rank ?? null) : null;
 
@@ -378,7 +365,7 @@ export async function GET(req: Request) {
         isPoints,
         currentMilestoneInfo,
         allTimeMilestoneInfo,
-        currentYear: effectiveYear,
-        isCurrentYearData: hasCurrentYearData,
+        dateFilter: dateFilterDescription,
+        isRolling12Months: isBeforeApril,
     });
 }

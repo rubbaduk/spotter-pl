@@ -162,18 +162,34 @@ export async function GET(req: Request) {
         ? `WHERE ${baseConditions.join(' AND ')}`
         : '';
 
-    // current rankings (current year only)
-    const currentYear = new Date().getFullYear();
-    let effectiveYear = currentYear;
-    let hasCurrentYearData = true;
-
-    let currentYearStr = effectiveYear.toString();
+    // current rankings - hybrid date filtering:
+    // April onwards: current year only
+    // Jan-Mar: rolling 12 months (includes previous year data)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed (0 = Jan, 3 = April)
+    const isBeforeApril = currentMonth < 3; // Jan, Feb, Mar
     
-    let currentConditions = [...baseConditions];
-    currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
-    let currentParams = [...baseParams, `${currentYearStr}%`];
+    let dateFilterDescription: string;
+    const currentConditions = [...baseConditions];
+    let currentParams: (string | null)[];
     
-    let currentWhere = currentConditions.length > 0 
+    if (isBeforeApril) {
+        // Jan-Mar: use rolling 12 months
+        const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        const rolling12MonthDate = twelveMonthsAgo.toISOString().split('T')[0];
+        currentConditions.push(`date >= $${baseParams.length + 1}`);
+        currentParams = [...baseParams, rolling12MonthDate];
+        dateFilterDescription = `rolling12m_from_${rolling12MonthDate}`;
+    } else {
+        // April onwards: current year only
+        const currentYearStr = currentYear.toString();
+        currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
+        currentParams = [...baseParams, `${currentYearStr}%`];
+        dateFilterDescription = `year_${currentYear}`;
+    }
+    
+    const currentWhere = currentConditions.length > 0 
         ? `WHERE ${currentConditions.join(' AND ')}`
         : '';
 
@@ -194,29 +210,8 @@ export async function GET(req: Request) {
             AND CAST(${rankColumn} AS FLOAT) > 0
         ) combined
     `;
-    let currentCountResult = await pool.query(currentCountQuery, currentParams);
-    let totalCurrent = parseInt(currentCountResult.rows[0]?.total || '0', 10);
-
-    // fallback on prev year if no data for current year
-    if (totalCurrent === 0) {
-        effectiveYear = currentYear - 1;
-        hasCurrentYearData = false;
-
-        currentYearStr = effectiveYear.toString();
-
-        currentConditions = [...baseConditions];
-        currentConditions.push(`date::text LIKE $${baseParams.length + 1}`);
-        currentParams = [...baseParams, `${currentYearStr}%`];
-
-        currentWhere = currentConditions.length > 0
-            ? `WHERE ${currentConditions.join(' AND ')}`
-            : '';
-
-        currentCountResult = await pool.query(currentCountQuery, currentParams);
-        totalCurrent = parseInt(currentCountResult.rows[0]?.total || '0', 10);
-    } else {
-        hasCurrentYearData = true;
-    }
+    const currentCountResult = await pool.query(currentCountQuery, currentParams);
+    const totalCurrent = parseInt(currentCountResult.rows[0]?.total || '0', 10);
 
     // count how many lifters have a better value than the manual entry
     const currentRankQuery = `
@@ -302,7 +297,7 @@ export async function GET(req: Request) {
         liftCategory,
         athleteBest,
         isPoints,
-        currentYear: effectiveYear,
-        isCurrentYearData: hasCurrentYearData,
+        dateFilter: dateFilterDescription,
+        isRolling12Months: isBeforeApril,
     });
 }
